@@ -6,6 +6,7 @@
 typedef std::regex              Regex;
 
 static const Regex intRegex("^[-+]?\\d+$");
+static const Regex floatRegex("^[+-]?\\d+[.]{1}\\d+$");
 static const Regex closeRegex("[\\)\\]}]");
 
 static const Regex whitespaceRegex("[\\s,]+|;.*");
@@ -178,6 +179,7 @@ static malValuePtr readAtom(Tokeniser& tokeniser)
         { "false",  mal::falseValue()  },
         { "nil",    mal::nilValue()          },
         { "true",   mal::trueValue()   },
+        { "pi",  mal::piValue()   },
     };
 
     String token = tokeniser.next();
@@ -205,6 +207,9 @@ static malValuePtr readAtom(Tokeniser& tokeniser)
     }
     if (std::regex_match(token, intRegex)) {
         return mal::integer(token);
+    }
+    if (std::regex_match(token, floatRegex)) {
+        return mal::mdouble(token);
     }
     return mal::symbol(token);
 }

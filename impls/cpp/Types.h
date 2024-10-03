@@ -32,6 +32,8 @@ public:
 
     virtual String print(bool readably) const = 0;
 
+    virtual bool isFloat() const { return false; }
+
 protected:
     virtual bool doIsEqualTo(const malValue* rhs) const = 0;
 
@@ -85,14 +87,34 @@ public:
 
     int64_t value() const { return m_value; }
 
-    virtual bool doIsEqualTo(const malValue* rhs) const {
-        return m_value == static_cast<const malInteger*>(rhs)->m_value;
-    }
+    virtual bool doIsEqualTo(const malValue* rhs) const;
 
     WITH_META(malInteger);
 
 private:
     const int64_t m_value;
+};
+
+class malDouble : public malValue {
+public:
+    malDouble(double value) : m_value(value) { }
+    malDouble(const malDouble& that, malValuePtr meta)
+        : malValue(meta), m_value(that.m_value) { }
+
+    virtual String print(bool readably) const {
+        return std::to_string(m_value);
+    }
+
+    virtual bool isFloat() const { return true; }
+
+    double value() const { return m_value; }
+
+    virtual bool doIsEqualTo(const malValue* rhs) const;
+
+    WITH_META(malDouble);
+
+private:
+    const double m_value;
 };
 
 class malStringBase : public malValue {
@@ -355,6 +377,8 @@ namespace mal {
     malValuePtr hash(const malHash::Map& map);
     malValuePtr integer(int64_t value);
     malValuePtr integer(const String& token);
+    malValuePtr mdouble(double value);
+    malValuePtr mdouble(const String& token);
     malValuePtr keyword(const String& token);
     malValuePtr lambda(const StringVec&, malValuePtr, malEnvPtr);
     malValuePtr list(malValueVec* items);
@@ -367,6 +391,7 @@ namespace mal {
     malValuePtr string(const String& token);
     malValuePtr symbol(const String& token);
     malValuePtr trueValue();
+    malValuePtr piValue();
     malValuePtr vector(malValueVec* items);
     malValuePtr vector(malValueIter begin, malValueIter end);
 };

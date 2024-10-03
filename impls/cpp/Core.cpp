@@ -7,6 +7,18 @@
 #include <fstream>
 #include <iostream>
 
+/* temp defined */
+#include <regex>
+
+typedef std::regex Regex;
+
+static const Regex intRegex("^[-+]?\\d+$");
+static const Regex floatRegex("^[+-]?\\d+[.]{1}\\d+$");
+static const Regex floatPointRegex("[.]{1}\\d+$");
+
+#include <math.h>
+#include <cmath>
+
 #define CHECK_ARGS_IS(expected) \
     checkArgsIs(name.c_str(), expected, \
                   std::distance(argsBegin, argsEnd))
@@ -18,6 +30,45 @@
 #define CHECK_ARGS_AT_LEAST(expected) \
     checkArgsAtLeast(name.c_str(), expected, \
                         std::distance(argsBegin, argsEnd))
+
+#define CHECK_ARGS_HAS_FLOAT \
+    int pos = 0; \
+    bool hasFloat = false; \
+    do { if (VAL_IS_FLOAT) { hasFloat = true; break; } pos++; argsBegin++; } while (argsBegin != argsEnd); \
+    for (int i = 0; i != pos; ++i) { argsBegin--; }
+
+#define VAL_IS_FLOAT (argsBegin->ptr()->isFloat())
+
+#define ADD_INT_VAL(val) \
+    malInteger val = dynamic_cast<malInteger*>(argsBegin->ptr());
+
+#define ADD_FLOAT_VAL(val) \
+    malDouble val = dynamic_cast<malDouble*>(argsBegin->ptr());
+
+#define ADD_LIST_TYPE(val) \
+    malList val = dynamic_cast<malList*>(argsBegin->ptr());
+
+#define SET_INT_VAL(opr, checkDivByZero) \
+    ADD_INT_VAL(*intVal) \
+    intValue = intValue opr intVal->value(); \
+    if (checkDivByZero) { \
+        MAL_CHECK(intVal->value() != 0, "Division by zero"); }
+
+#define SET_FLOAT_VAL(opr, checkDivByZero) \
+    if (VAL_IS_FLOAT) \
+    { \
+        ADD_FLOAT_VAL(*floatVal) \
+        floatValue = floatValue opr floatVal->value(); \
+        if (checkDivByZero) { \
+            MAL_CHECK(floatVal->value() != 0.0, "Division by zero"); } \
+    } \
+    else \
+    { \
+        ADD_INT_VAL(*intVal) \
+        floatValue = floatValue opr double(intVal->value()); \
+        if (checkDivByZero) { \
+            MAL_CHECK(intVal->value() != 0, "Division by zero"); } \
+    }
 
 static String printValues(malValueIter begin, malValueIter end,
                            const String& sep, bool readably);
@@ -51,20 +102,75 @@ static StaticList<malBuiltIn*> handlers;
 
 #define BUILTIN_INTOP(op, checkDivByZero) \
     BUILTIN(#op) { \
-        CHECK_ARGS_IS(2); \
-        ARG(malInteger, lhs); \
-        ARG(malInteger, rhs); \
-        if (checkDivByZero) { \
-            MAL_CHECK(rhs->value() != 0, "Division by zero"); \
-        } \
-        return mal::integer(lhs->value() op rhs->value()); \
+        BUILTIN_VAL(op, checkDivByZero); \
+        }
+
+#define BUILTIN_VAL(opr, checkDivByZero) \
+    CHECK_ARGS_AT_LEAST(2); \
+    CHECK_ARGS_HAS_FLOAT \
+    if (hasFloat) { \
+        BUILTIN_FLOAT_VAL(opr, checkDivByZero) \
+    } else { \
+        BUILTIN_INT_VAL(opr, checkDivByZero) \
     }
+
+#define BUILTIN_FLOAT_VAL(opr, checkDivByZero) \
+    [[maybe_unused]] double floatValue = 0; \
+    SET_FLOAT_VAL(+, false); \
+    argsBegin++; \
+    do { \
+        SET_FLOAT_VAL(opr, checkDivByZero); \
+        argsBegin++; \
+    } while (argsBegin != argsEnd); \
+    return mal::mdouble(floatValue);
+
+#define BUILTIN_INT_VAL(opr, checkDivByZero) \
+    [[maybe_unused]] int16_t intValue = 0; \
+    SET_INT_VAL(+, false); \
+    argsBegin++; \
+    do { \
+        SET_INT_VAL(opr, checkDivByZero); \
+        argsBegin++; \
+    } while (argsBegin != argsEnd); \
+    return mal::integer(intValue);
+
+#define BUILTIN_FUNCTION(foo) \
+    CHECK_ARGS_IS(1); \
+    if (VAL_IS_FLOAT) { \
+        ADD_FLOAT_VAL(*lhs) \
+        return mal::mdouble(foo(lhs->value())); } \
+    else { \
+        ADD_INT_VAL(*lhs) \
+        return mal::mdouble(foo(lhs->value())); }
+
+#define BUILTIN_OP_COMPARE(opr) \
+    CHECK_ARGS_IS(2); \
+    CHECK_ARGS_HAS_FLOAT \
+    if (hasFloat) { \
+        if (VAL_IS_FLOAT) { \
+            ADD_FLOAT_VAL(*floatRhs) \
+            argsBegin++; \
+            if (VAL_IS_FLOAT) { \
+                ADD_FLOAT_VAL(*floatLhs) \
+                return mal::boolean(floatRhs->value() opr floatLhs->value()); } \
+            else { \
+               ADD_INT_VAL(*intLhs) \
+               return mal::boolean(floatRhs->value() opr double(intLhs->value())); } } \
+        else { \
+            ADD_INT_VAL(*intRhs) \
+            argsBegin++; \
+            ADD_FLOAT_VAL(*floatLhs) \
+            return mal::boolean(double(intRhs->value()) opr floatLhs->value()); } } \
+    else { \
+        ADD_INT_VAL(*intRhs) \
+        argsBegin++; \
+        ADD_INT_VAL(*intLhs) \
+        return mal::boolean(intRhs->value() opr intLhs->value()); }
 
 BUILTIN_ISA("atom?",        malAtom);
 BUILTIN_ISA("keyword?",     malKeyword);
 BUILTIN_ISA("list?",        malList);
 BUILTIN_ISA("map?",         malHash);
-BUILTIN_ISA("number?",      malInteger);
 BUILTIN_ISA("sequential?",  malSequence);
 BUILTIN_ISA("string?",      malString);
 BUILTIN_ISA("symbol?",      malSymbol);
@@ -73,7 +179,6 @@ BUILTIN_ISA("vector?",      malVector);
 BUILTIN_INTOP(+,            false);
 BUILTIN_INTOP(/,            true);
 BUILTIN_INTOP(*,            false);
-BUILTIN_INTOP(%,            true);
 
 BUILTIN_IS("true?",         trueValue);
 BUILTIN_IS("false?",        falseValue);
@@ -81,50 +186,57 @@ BUILTIN_IS("nil?",          nilValue);
 
 BUILTIN("-")
 {
-    int argCount = CHECK_ARGS_BETWEEN(1, 2);
-    ARG(malInteger, lhs);
-    if (argCount == 1) {
-        return mal::integer(- lhs->value());
+    if (CHECK_ARGS_AT_LEAST(1) == 1)
+    {
+        if (VAL_IS_FLOAT)
+        {
+            ADD_FLOAT_VAL(*lhs)
+            return mal::mdouble(-lhs->value());
+        }
+        else
+        {
+            ADD_INT_VAL(*lhs)
+            return mal::integer(-lhs->value());
+        }
     }
+    CHECK_ARGS_AT_LEAST(2);
+    CHECK_ARGS_HAS_FLOAT
+    if (hasFloat) {
+        BUILTIN_FLOAT_VAL(-, false);
+    } else {
+        BUILTIN_INT_VAL(-, false);
+    }
+}
 
-    ARG(malInteger, rhs);
-    return mal::integer(lhs->value() - rhs->value());
+BUILTIN("%")
+{
+    CHECK_ARGS_AT_LEAST(2);
+    CHECK_ARGS_HAS_FLOAT
+    if (hasFloat) {
+        return mal::nilValue();
+    } else {
+        BUILTIN_INT_VAL(%, false);
+    }
 }
 
 BUILTIN("<=")
 {
-    CHECK_ARGS_IS(2);
-    ARG(malInteger, lhs);
-    ARG(malInteger, rhs);
-
-    return mal::boolean(lhs->value() <= rhs->value());
+    BUILTIN_OP_COMPARE(<=);
 }
 
 BUILTIN(">=")
 {
-    CHECK_ARGS_IS(2);
-    ARG(malInteger, lhs);
-    ARG(malInteger, rhs);
-
-    return mal::boolean(lhs->value() >= rhs->value());
+    BUILTIN_OP_COMPARE(>=);
 }
 
 BUILTIN("<")
 {
-    CHECK_ARGS_IS(2);
-    ARG(malInteger, lhs);
-    ARG(malInteger, rhs);
-
-    return mal::boolean(lhs->value() < rhs->value());
+    BUILTIN_OP_COMPARE(<);
 }
 
 BUILTIN(">")
 {
-    CHECK_ARGS_IS(2);
-    ARG(malInteger, lhs);
-    ARG(malInteger, rhs);
-
-    return mal::boolean(lhs->value() > rhs->value());
+    BUILTIN_OP_COMPARE(>);
 }
 
 BUILTIN("=")
@@ -134,6 +246,74 @@ BUILTIN("=")
     const malValue* rhs = (*argsBegin++).ptr();
 
     return mal::boolean(lhs->isEqualTo(rhs));
+}
+
+BUILTIN("/=")
+{
+    CHECK_ARGS_IS(2);
+    const malValue* lhs = (*argsBegin++).ptr();
+    const malValue* rhs = (*argsBegin++).ptr();
+
+    return mal::boolean(!lhs->isEqualTo(rhs));
+}
+#if 0
+BUILTIN("~")
+{
+    if (VAL_IS_FLOAT)
+    {
+        return mal::nilValue();
+    }
+    else
+    {
+        ADD_INT_VAL(*lhs)
+        return mal::integer(~lhs->value());
+    }
+}
+#endif
+
+BUILTIN("1+")
+{
+    CHECK_ARGS_IS(1);
+    if (VAL_IS_FLOAT)
+    {
+        ADD_FLOAT_VAL(*lhs)
+        return mal::mdouble(lhs->value()+1);
+    }
+    else
+    {
+        ADD_INT_VAL(*lhs)
+        return mal::integer(lhs->value()+1);
+    }
+}
+
+BUILTIN("1-")
+{
+    CHECK_ARGS_IS(1);
+    if (VAL_IS_FLOAT)
+    {
+        ADD_FLOAT_VAL(*lhs)
+        return mal::mdouble(lhs->value()-1);
+    }
+    else
+    {
+        ADD_INT_VAL(*lhs)
+        return mal::integer(lhs->value()-1);
+    }
+}
+
+BUILTIN("abs")
+{
+    CHECK_ARGS_IS(1);
+    if (VAL_IS_FLOAT)
+    {
+        ADD_FLOAT_VAL(*lhs)
+        return mal::mdouble(abs(lhs->value()));
+    }
+    else
+    {
+        ADD_INT_VAL(*lhs)
+        return mal::integer(abs(lhs->value()));
+    }
 }
 
 BUILTIN("apply")
@@ -153,6 +333,19 @@ BUILTIN("apply")
     return APPLY(op, args.begin(), args.end());
 }
 
+BUILTIN("ascii")
+{
+    CHECK_ARGS_IS(1);
+    const malValuePtr arg = *argsBegin++;
+
+    if (const malString* s = DYNAMIC_CAST(malString, arg))
+    {
+        return mal::integer(int(s->value().c_str()[0]));
+    }
+
+    return mal::integer(0);
+}
+
 BUILTIN("assoc")
 {
     CHECK_ARGS_AT_LEAST(1);
@@ -161,11 +354,129 @@ BUILTIN("assoc")
     return hash->assoc(argsBegin, argsEnd);
 }
 
+BUILTIN("atan")
+{
+    BUILTIN_FUNCTION(atan);
+}
+
+BUILTIN("atof")
+{
+    CHECK_ARGS_IS(1);
+    const malValuePtr arg = *argsBegin++;
+
+    if (const malString* s = DYNAMIC_CAST(malString, arg))
+    {
+        if(std::regex_match(s->value().c_str(), intRegex) ||
+            std::regex_match(s->value().c_str(), floatRegex))
+            {
+                return mal::mdouble(atof(s->value().c_str()));
+            }
+    }
+    return mal::mdouble(0);
+}
+
+BUILTIN("atoi")
+{
+    CHECK_ARGS_IS(1);
+    const malValuePtr arg = *argsBegin++;
+
+    if (const malString* s = DYNAMIC_CAST(malString, arg))
+    {
+        if (std::regex_match(s->value().c_str(), intRegex))
+        {
+            return mal::integer(atoi(s->value().c_str()));
+        }
+        if (std::regex_match(s->value().c_str(), floatRegex))
+        {
+            return mal::integer(atoi(std::regex_replace(s->value().c_str(),
+                                                        floatPointRegex, "").c_str()));
+        }
+    }
+    return mal::integer(0);
+}
+
 BUILTIN("atom")
 {
     CHECK_ARGS_IS(1);
 
     return mal::atom(*argsBegin);
+}
+
+BUILTIN("car")
+{
+    CHECK_ARGS_IS(1);
+    ARG(malSequence, seq);
+
+    MAL_CHECK(0 < seq->count(), "Index out of range");
+
+    return seq->first();
+}
+
+BUILTIN("cadr")
+{
+    CHECK_ARGS_IS(1);
+    ARG(malSequence, seq);
+
+    MAL_CHECK(1 < seq->count(), "Index out of range");
+
+    return seq->item(1);
+}
+
+BUILTIN("caddr")
+{
+    CHECK_ARGS_IS(1);
+    ARG(malSequence, seq);
+
+    MAL_CHECK(2 < seq->count(), "Index out of range");
+
+    return seq->item(2);
+}
+
+BUILTIN("cdr")
+{
+    CHECK_ARGS_IS(1);
+    if (*argsBegin == mal::nilValue()) {
+        return mal::list(new malValueVec(0));
+    }
+    ARG(malSequence, seq);
+    return seq->rest();
+}
+
+// helper foo to cast integer (64 bit) type to char (8 bit) type
+char itoa64(const int64_t &sign)
+{
+    int64_t bit64[8];
+    char result = 0;
+
+    for (int i = 0; i < 8; i++)
+    {
+        bit64[i] = (sign >> i) & 1;
+        if (bit64[i])
+        {
+            result |= 1 << i;
+        }
+    }
+    return result;
+}
+
+BUILTIN("chr")
+{
+    CHECK_ARGS_IS(1);
+    char sign = 0;
+
+    if (VAL_IS_FLOAT)
+    {
+        ADD_FLOAT_VAL(*lhs)
+        auto sign64 = static_cast<std::int64_t>(lhs->value());
+        sign = itoa64(sign64);
+    }
+    else
+    {
+        ADD_INT_VAL(*lhs)
+        sign = itoa64(lhs->value());
+    }
+
+    return mal::string(std::string(1 , sign));
 }
 
 BUILTIN("concat")
@@ -218,6 +529,11 @@ BUILTIN("contains?")
     return mal::boolean(hash->contains(*argsBegin));
 }
 
+BUILTIN("cos")
+{
+    BUILTIN_FUNCTION(cos);
+}
+
 BUILTIN("count")
 {
     CHECK_ARGS_IS(1);
@@ -259,6 +575,53 @@ BUILTIN("eval")
     return EVAL(*argsBegin, NULL);
 }
 
+BUILTIN("exit")
+{
+    CHECK_ARGS_IS(0);
+    exit(EXIT_SUCCESS);
+}
+
+BUILTIN("expt")
+{
+    CHECK_ARGS_IS(2);
+
+    if (VAL_IS_FLOAT)
+    {
+        ADD_FLOAT_VAL(*lhs)
+        argsBegin++;
+        if (VAL_IS_FLOAT)
+        {
+            ADD_FLOAT_VAL(*rhs)
+            return mal::mdouble(pow(lhs->value(),
+                                    rhs->value()));
+        }
+        else
+        {
+            ADD_INT_VAL(*rhs)
+            return mal::mdouble(pow(lhs->value(),
+                                    double(rhs->value())));
+        }
+    }
+    else
+    {
+        ADD_INT_VAL(*lhs)
+        argsBegin++;
+        if (VAL_IS_FLOAT)
+        {
+            ADD_FLOAT_VAL(*rhs)
+            return mal::mdouble(pow(double(lhs->value()),
+                                    rhs->value()));
+        }
+        else
+        {
+            ADD_INT_VAL(*rhs)
+            auto result = static_cast<std::int64_t>(pow(double(lhs->value()),
+                                    double(rhs->value())));
+            return mal::integer(result);
+        }
+    }
+}
+
 BUILTIN("first")
 {
     CHECK_ARGS_IS(1);
@@ -267,6 +630,22 @@ BUILTIN("first")
     }
     ARG(malSequence, seq);
     return seq->first();
+}
+
+BUILTIN("float")
+{
+    CHECK_ARGS_IS(1);
+
+    if (VAL_IS_FLOAT)
+    {
+        ADD_FLOAT_VAL(*lhs)
+        return mal::mdouble(lhs->value());
+    }
+    else
+    {
+        ADD_INT_VAL(*lhs)
+        return mal::mdouble(double(lhs->value()));
+    }
 }
 
 BUILTIN("fn?")
@@ -351,6 +730,13 @@ BUILTIN("meta")
     malValuePtr obj = *argsBegin++;
 
     return obj->meta();
+}
+
+BUILTIN("number?")
+{
+    CHECK_ARGS_IS(1);
+    return mal::boolean(DYNAMIC_CAST(malInteger, *argsBegin)
+                    || DYNAMIC_CAST(malDouble, *argsBegin));
 }
 
 BUILTIN("nth")
@@ -441,6 +827,10 @@ BUILTIN("seq")
     MAL_FAIL("%s is not a string or sequence", arg->print(true).c_str());
 }
 
+BUILTIN("sin")
+{
+    BUILTIN_FUNCTION(sin);
+}
 
 BUILTIN("slurp")
 {
@@ -461,9 +851,44 @@ BUILTIN("slurp")
     return mal::string(data);
 }
 
+BUILTIN("sqrt")
+{
+    BUILTIN_FUNCTION(sqrt);
+}
+
 BUILTIN("str")
 {
     return mal::string(printValues(argsBegin, argsEnd, "", false));
+}
+
+BUILTIN("substr")
+{
+    int count = CHECK_ARGS_AT_LEAST(2);
+    ARG(malString, s);
+    ARG(malInteger, start);
+
+    if (s)
+    {
+        std::string bla = s->value();
+
+        if (count > 2)
+        {
+            ARG(malInteger, size);
+            if (start && size)
+            {
+                return mal::string(bla.substr(start->value()-1, size->value()));
+            }
+        }
+        else
+        {
+            if (start)
+            {
+                return mal::string(bla.substr(start->value()-1));
+            }
+        }
+    }
+
+    return mal::string(std::string(""));
 }
 
 BUILTIN("swap!")
@@ -486,6 +911,11 @@ BUILTIN("symbol")
     CHECK_ARGS_IS(1);
     ARG(malString, token);
     return mal::symbol(token->value());
+}
+
+BUILTIN("tan")
+{
+    BUILTIN_FUNCTION(tan);
 }
 
 BUILTIN("throw")
@@ -531,6 +961,22 @@ BUILTIN("with-meta")
     malValuePtr obj  = *argsBegin++;
     malValuePtr meta = *argsBegin++;
     return obj->withMeta(meta);
+}
+
+BUILTIN("zero?")
+{
+    CHECK_ARGS_IS(1);
+
+    if (VAL_IS_FLOAT)
+    {
+        ADD_FLOAT_VAL(*lhs)
+        return mal::boolean(lhs->value() == 0.0);
+    }
+    else
+    {
+        ADD_INT_VAL(*lhs)
+        return mal::boolean(lhs->value() == 0.0);
+    }
 }
 
 void installCore(malEnvPtr env) {

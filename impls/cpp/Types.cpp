@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <memory>
 #include <typeinfo>
+#include <math.h>
 
 namespace mal {
     malValuePtr atom(malValuePtr value) {
@@ -23,7 +24,6 @@ namespace mal {
         static malValuePtr c(new malConstant("false"));
         return malValuePtr(c);
     };
-
 
     malValuePtr hash(const malHash::Map& map) {
         return malValuePtr(new malHash(map));
@@ -86,6 +86,21 @@ namespace mal {
 
     malValuePtr nilValue() {
         static malValuePtr c(new malConstant("nil"));
+        return malValuePtr(c);
+    };
+
+    malValuePtr mdouble(double value)
+    {
+        return malValuePtr(new malDouble(value));
+    };
+
+    malValuePtr mdouble(const String& token)
+    {
+        return mdouble(std::stof(token));
+    };
+
+    malValuePtr piValue() {
+        static malValuePtr c(new malDouble(M_PI));
         return malValuePtr(c);
     };
 
@@ -359,7 +374,11 @@ bool malValue::isEqualTo(const malValue* rhs) const
     // Special-case. Vectors and Lists can be compared.
     bool matchingTypes = (typeid(*this) == typeid(*rhs)) ||
         (dynamic_cast<const malSequence*>(this) &&
-         dynamic_cast<const malSequence*>(rhs));
+         dynamic_cast<const malSequence*>(rhs))          ||
+        (dynamic_cast<const malInteger*>(this) &&
+         dynamic_cast<const malDouble*>(rhs))          ||
+        (dynamic_cast<const malDouble*>(this) &&
+         dynamic_cast<const malInteger*>(rhs));
 
     return matchingTypes && doIsEqualTo(rhs);
 }
@@ -496,3 +515,16 @@ String malVector::print(bool readably) const
 {
     return '[' + malSequence::print(readably) + ']';
 }
+
+bool malInteger::doIsEqualTo(const malValue* rhs) const
+{
+    return m_value == static_cast<const malInteger*>(rhs)->m_value
+    || double(m_value) == static_cast<const malDouble*>(rhs)->value();
+}
+
+bool malDouble::doIsEqualTo(const malValue* rhs) const
+{
+    return m_value == static_cast<const malDouble*>(rhs)->m_value
+    || m_value == double(static_cast<const malInteger*>(rhs)->value());
+}
+
