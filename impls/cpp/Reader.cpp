@@ -177,9 +177,17 @@ static malValuePtr readAtom(Tokeniser& tokeniser)
     };
     Constant constantTable[] = {
         { "false",  mal::falseValue()  },
-        { "nil",    mal::nilValue()          },
+        { "nil",    mal::nilValue()    },
         { "true",   mal::trueValue()   },
-        { "pi",  mal::piValue()   },
+        { "pi",     mal::piValue()     },
+        { "ATOM",   mal::typeAtom()    },
+        { "FILE",   mal::typeFile()    },
+        { "INT",    mal::typeInteger() },
+        { "LIST",   mal::typeList()    },
+        { "REAL",   mal::typeReal()    },
+        { "STR",    mal::typeString()  },
+        { "VEC",    mal::typeVector()  },
+        { "KEYW",   mal::typeKeword()  },
     };
 
     String token = tokeniser.next();

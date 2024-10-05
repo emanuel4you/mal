@@ -4,9 +4,13 @@
 #include "MAL.h"
 
 #include <exception>
+#include <stdio.h>
+#include <stdlib.h>
 #include <map>
 
 class malEmptyInputException : public std::exception { };
+
+enum class MALTYPE { ATOM, FILE, INT, LIST, MAP, REAL, STR, SYM, UNDEF, VEC, KEYW };
 
 class malValue : public RefCounted {
 public:
@@ -32,7 +36,7 @@ public:
 
     virtual String print(bool readably) const = 0;
 
-    virtual bool isFloat() const { return false; }
+    virtual MALTYPE type() const { return MALTYPE::UNDEF; }
 
 protected:
     virtual bool doIsEqualTo(const malValue* rhs) const = 0;
@@ -85,6 +89,8 @@ public:
         return std::to_string(m_value);
     }
 
+    virtual MALTYPE type() const { return MALTYPE::INT; }
+
     int64_t value() const { return m_value; }
 
     virtual bool doIsEqualTo(const malValue* rhs) const;
@@ -106,6 +112,7 @@ public:
     }
 
     virtual bool isFloat() const { return true; }
+    virtual MALTYPE type() const { return MALTYPE::REAL; }
 
     double value() const { return m_value; }
 
@@ -115,6 +122,46 @@ public:
 
 private:
     const double m_value;
+};
+
+class malFile : public malValue {
+public:
+    malFile(const char *path, const char &mode)
+        : m_path(path)
+        , m_mode(mode)
+    {
+    }
+    malFile(const malFile& that, malValuePtr meta)
+        : malValue(meta), m_value(that.m_value) { }
+
+    virtual String print(bool) const {
+        String path = "#<file ";
+        path += m_path;
+        path += " >";
+        return path;
+    }
+
+    virtual MALTYPE type() const { return MALTYPE::FILE; }
+
+    virtual bool doIsEqualTo(const malValue* rhs) const {
+        return value() == static_cast<const malFile*>(rhs)->value();
+    }
+
+    ::FILE *value() const { return m_value; }
+
+    WITH_META(malFile);
+
+    malValuePtr close();
+    malValuePtr open();
+    malValuePtr readLine();
+    malValuePtr readChar();
+    malValuePtr writeChar(const char &c);
+    malValuePtr writeLine(const String &line);
+
+private:
+    String m_path;
+    ::FILE *m_value;
+    char m_mode;
 };
 
 class malStringBase : public malValue {
@@ -140,6 +187,7 @@ public:
         : malStringBase(that, meta) { }
 
     virtual String print(bool readably) const;
+    virtual MALTYPE type() const { return MALTYPE::STR; }
 
     String escapedValue() const;
 
@@ -161,6 +209,8 @@ public:
         return value() == static_cast<const malKeyword*>(rhs)->value();
     }
 
+    virtual MALTYPE type() const { return MALTYPE::KEYW; }
+
     WITH_META(malKeyword);
 };
 
@@ -176,6 +226,8 @@ public:
     virtual bool doIsEqualTo(const malValue* rhs) const {
         return value() == static_cast<const malSymbol*>(rhs)->value();
     }
+
+    virtual MALTYPE type() const { return MALTYPE::SYM; }
 
     WITH_META(malSymbol);
 };
@@ -218,6 +270,7 @@ public:
         : malSequence(that, meta) { }
 
     virtual String print(bool readably) const;
+    virtual MALTYPE type() const { return MALTYPE::LIST; }
     virtual malValuePtr eval(malEnvPtr env);
 
     virtual malValuePtr conj(malValueIter argsBegin,
@@ -236,6 +289,7 @@ public:
 
     virtual malValuePtr eval(malEnvPtr env);
     virtual String print(bool readably) const;
+    virtual MALTYPE type() const { return MALTYPE::VEC; }
 
     virtual malValuePtr conj(malValueIter argsBegin,
                              malValueIter argsEnd) const;
@@ -272,6 +326,8 @@ public:
     virtual String print(bool readably) const;
 
     virtual bool doIsEqualTo(const malValue* rhs) const;
+
+    virtual MALTYPE type() const { return MALTYPE::MAP; }
 
     WITH_META(malHash);
 
@@ -357,6 +413,8 @@ public:
         return "(atom " + m_value->print(readably) + ")";
     };
 
+    virtual MALTYPE type() const { return MALTYPE::ATOM; }
+
     malValuePtr deref() const { return m_value; }
 
     malValuePtr reset(malValuePtr value) { return m_value = value; }
@@ -372,13 +430,12 @@ namespace mal {
     malValuePtr boolean(bool value);
     malValuePtr builtin(const String& name, malBuiltIn::ApplyFunc handler);
     malValuePtr falseValue();
+    malValuePtr file(const char *path, const char &mode);
     malValuePtr hash(malValueIter argsBegin, malValueIter argsEnd,
                      bool isEvaluated);
     malValuePtr hash(const malHash::Map& map);
     malValuePtr integer(int64_t value);
     malValuePtr integer(const String& token);
-    malValuePtr mdouble(double value);
-    malValuePtr mdouble(const String& token);
     malValuePtr keyword(const String& token);
     malValuePtr lambda(const StringVec&, malValuePtr, malEnvPtr);
     malValuePtr list(malValueVec* items);
@@ -387,10 +444,24 @@ namespace mal {
     malValuePtr list(malValuePtr a, malValuePtr b);
     malValuePtr list(malValuePtr a, malValuePtr b, malValuePtr c);
     malValuePtr macro(const malLambda& lambda);
+    malValuePtr mdouble(double value);
+    malValuePtr mdouble(const String& token);
     malValuePtr nilValue();
     malValuePtr string(const String& token);
     malValuePtr symbol(const String& token);
     malValuePtr trueValue();
+    malValuePtr type(MALTYPE type);
+    malValuePtr typeAtom();
+    malValuePtr typeFile();
+    malValuePtr typeInteger();
+    malValuePtr typeList();
+    malValuePtr typeMap();
+    malValuePtr typeReal();
+    malValuePtr typeString();
+    malValuePtr typeSymbol();
+    malValuePtr typeUndef();
+    malValuePtr typeVector();
+    malValuePtr typeKeword();
     malValuePtr piValue();
     malValuePtr vector(malValueVec* items);
     malValuePtr vector(malValueIter begin, malValueIter end);

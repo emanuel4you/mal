@@ -16,6 +16,44 @@ namespace mal {
         return value ? trueValue() : falseValue();
     }
 
+    malValuePtr type(MALTYPE type) {
+        switch(type)
+        {
+            case MALTYPE::ATOM:
+                return typeAtom();
+                break;
+            case MALTYPE::FILE:
+                return typeFile();
+                break;
+            case MALTYPE::INT:
+                return typeInteger();
+                break;
+            case MALTYPE::LIST:
+                return typeList();
+                break;
+            case MALTYPE::MAP:
+                return typeMap();
+                break;
+            case MALTYPE::REAL:
+                return typeReal();
+                break;
+            case MALTYPE::STR:
+                return typeString();
+                break;
+            case MALTYPE::SYM:
+                return typeSymbol();
+                break;
+            case MALTYPE::VEC:
+                return typeVector();
+                break;
+            case MALTYPE::KEYW:
+                return typeKeword();
+                break;
+            default:
+                return typeUndef();
+        }
+    }
+
     malValuePtr builtin(const String& name, malBuiltIn::ApplyFunc handler) {
         return malValuePtr(new malBuiltIn(name, handler));
     };
@@ -23,6 +61,11 @@ namespace mal {
     malValuePtr falseValue() {
         static malValuePtr c(new malConstant("false"));
         return malValuePtr(c);
+    };
+
+    malValuePtr file(const char *path, const char &mode)
+    {
+        return malValuePtr(new malFile(path, mode));
     };
 
     malValuePtr hash(const malHash::Map& map) {
@@ -114,6 +157,51 @@ namespace mal {
 
     malValuePtr trueValue() {
         static malValuePtr c(new malConstant("true"));
+        return malValuePtr(c);
+    };
+
+    malValuePtr typeAtom() {
+        static malValuePtr c(new malConstant("ATOM"));
+        return malValuePtr(c);
+    };
+    malValuePtr typeFile() {
+        static malValuePtr c(new malConstant("FILE"));
+        return malValuePtr(c);
+    };
+    malValuePtr typeInteger() {
+        static malValuePtr c(new malConstant("INT"));
+        return malValuePtr(c);
+    };
+    malValuePtr typeList() {
+        static malValuePtr c(new malConstant("LIST"));
+        return malValuePtr(c);
+    };
+    malValuePtr typeMap() {
+        static malValuePtr c(new malConstant("MAP"));
+        return malValuePtr(c);
+    };
+    malValuePtr typeReal() {
+        static malValuePtr c(new malConstant("REAL"));
+        return malValuePtr(c);
+    };
+    malValuePtr typeString() {
+        static malValuePtr c(new malConstant("STR"));
+        return malValuePtr(c);
+    };
+    malValuePtr typeSymbol() {
+        static malValuePtr c(new malConstant("SYM"));
+        return malValuePtr(c);
+    };
+    malValuePtr typeUndef() {
+        static malValuePtr c(new malConstant("UNDEF"));
+        return malValuePtr(c);
+    };
+    malValuePtr typeVector() {
+        static malValuePtr c(new malConstant("VEC"));
+        return malValuePtr(c);
+    };
+    malValuePtr typeKeword() {
+        static malValuePtr c(new malConstant("KEYW"));
         return malValuePtr(c);
     };
 
@@ -527,4 +615,68 @@ bool malDouble::doIsEqualTo(const malValue* rhs) const
     return m_value == static_cast<const malDouble*>(rhs)->m_value
     || m_value == double(static_cast<const malInteger*>(rhs)->value());
 }
+
+malValuePtr malFile::open()
+{
+    switch(m_mode)
+    {
+        case 'w':
+            m_value = fopen(m_path.c_str(), "w");
+            break;
+
+        case 'r':
+            m_value = fopen(m_path.c_str(), "r");
+            break;
+
+        case 'a':
+            m_value = fopen(m_path.c_str(), "a");
+            break;
+        default:
+            return mal::nilValue();
+    }
+
+    if (m_value == NULL)
+    {
+        return mal::nilValue();
+    }
+    return this;
+}
+
+malValuePtr malFile::close()
+{
+    MAL_CHECK(fclose(m_value) == 0,
+              "i/o can not close file");
+    return mal::nilValue();
+}
+
+malValuePtr malFile::writeLine (const String &line)
+{
+    MAL_CHECK(fprintf(m_value, "%s\n", line.c_str()) > 0,
+              "i/o can not write to file");
+
+    return mal::string(line);
+}
+
+malValuePtr malFile::writeChar(const char &c)
+{
+    MAL_CHECK(fputc(c, m_value) > -1,
+              "i/o can not write to file");
+    return mal::integer(c);
+}
+
+malValuePtr malFile::readLine()
+{
+    char buf[8192];
+    if (fgets(buf, sizeof(buf), m_value))
+    {
+         return mal::string(buf);
+    }
+    return mal::nilValue();
+}
+
+malValuePtr malFile::readChar()
+{
+    return mal::integer(fgetc(m_value));
+}
+
 

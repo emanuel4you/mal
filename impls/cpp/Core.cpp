@@ -37,7 +37,7 @@ static const Regex floatPointRegex("[.]{1}\\d+$");
     do { if (VAL_IS_FLOAT) { hasFloat = true; break; } pos++; argsBegin++; } while (argsBegin != argsEnd); \
     for (int i = 0; i != pos; ++i) { argsBegin--; }
 
-#define VAL_IS_FLOAT (argsBegin->ptr()->isFloat())
+#define VAL_IS_FLOAT (argsBegin->ptr()->type() == MALTYPE::REAL)
 
 #define ADD_INT_VAL(val) \
     malInteger val = dynamic_cast<malInteger*>(argsBegin->ptr());
