@@ -100,9 +100,14 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
             int argCount = list->count() - 1;
 
             if (special == "def!") {
-                checkArgsIs("def!", 2, argCount);
-                const malSymbol* id = VALUE_CAST(malSymbol, list->item(1));
-                return env->set(id->value(), EVAL(list->item(2), env));
+                MAL_CHECK(checkArgsAtLeast("def!", 2, argCount) % 2 == 0, "def!: missing value");
+                int i;
+                for (i = 1; i < argCount - 2; i += 2) {
+                    const malSymbol* id = VALUE_CAST(malSymbol, list->item(i));
+                    env->set(id->value(), EVAL(list->item(i+1), env));
+                }
+                const malSymbol* id = VALUE_CAST(malSymbol, list->item(i));
+                return env->set(id->value(), EVAL(list->item(i+1), env));
             }
 
             if (special == "defmacro!") {
@@ -175,6 +180,19 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
             if (special == "quote") {
                 checkArgsIs("quote", 1, argCount);
                 return list->item(1);
+            }
+
+            if (special == "repeat") {
+                checkArgsIs("repeat*", 2, argCount);
+                const malInteger* loop = VALUE_CAST(malInteger, list->item(1));
+
+                for (int i = 2; i <= argCount; i++) {
+                    for (int j = 1; j < loop->value(); j++) {
+                        EVAL(list->item(i), env);
+                    }
+                }
+                ast = list->item(argCount);
+                continue; // TCO
             }
 
             if (special == "try*") {
@@ -306,6 +324,10 @@ static const char* malFunctionTable[] = {
     "(def! load-file (fn* (filename) \
         (eval (read-string (str \"(do \" (slurp filename) \"\nnil)\")))))",
     "(def! *host-language* \"C++\")",
+    "(def! car first)",
+    "(def! cdr rest)",
+    "(def! strcat str)",
+    "(def! EOF -1)",
 };
 
 static void installFunctions(malEnvPtr env) {

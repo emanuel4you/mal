@@ -6,6 +6,11 @@
 #include <chrono>
 #include <fstream>
 #include <iostream>
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/select.h>
+#include <termios.h>
+#include <sys/ioctl.h>
 
 /* temp defined */
 #include <regex>
@@ -18,6 +23,10 @@ static const Regex floatPointRegex("[.]{1}\\d+$");
 
 #include <math.h>
 #include <cmath>
+
+#define REL "1.0"
+#define VERSION_STR(rel) "MAL LISP [C++] " rel " (en)"
+#define VERSION VERSION_STR(REL)
 
 #define CHECK_ARGS_IS(expected) \
     checkArgsIs(name.c_str(), expected, \
@@ -72,6 +81,8 @@ static const Regex floatPointRegex("[.]{1}\\d+$");
 
 static String printValues(malValueIter begin, malValueIter end,
                            const String& sep, bool readably);
+
+static int countValues(malValueIter begin, malValueIter end);
 
 static StaticList<malBuiltIn*> handlers;
 
@@ -166,6 +177,49 @@ static StaticList<malBuiltIn*> handlers;
         argsBegin++; \
         ADD_INT_VAL(*intLhs) \
         return mal::boolean(intRhs->value() opr intLhs->value()); }
+
+// helper foo to cast integer (64 bit) type to char (8 bit) type
+unsigned char itoa64(const int64_t &sign)
+{
+    int64_t bit64[8];
+    unsigned char result = 0;
+
+    if(sign < 0)
+    {
+        std::cout << "Warning: out of char value!" << std::endl;
+        return result;
+    }
+
+    for (int i = 0; i < 8; i++)
+    {
+        bit64[i] = (sign >> i) & 1;
+        if (bit64[i])
+        {
+            result |= 1 << i;
+        }
+    }
+    return result;
+}
+
+int kbhit()
+{
+    static const int STDIN = 0;
+    static bool initialized = false;
+
+    if (! initialized) {
+        // Use termios to turn off line buffering
+        termios term;
+        tcgetattr(STDIN, &term);
+        term.c_lflag &= ~ICANON;
+        tcsetattr(STDIN, TCSANOW, &term);
+        setbuf(stdin, NULL);
+        initialized = true;
+    }
+
+    int bytesWaiting;
+    ioctl(STDIN, FIONREAD, &bytesWaiting);
+    return bytesWaiting;
+}
 
 BUILTIN_ISA("atom?",        malAtom);
 BUILTIN_ISA("keyword?",     malKeyword);
@@ -401,7 +455,7 @@ BUILTIN("atom")
 
     return mal::atom(*argsBegin);
 }
-
+#if 0
 BUILTIN("car")
 {
     CHECK_ARGS_IS(1);
@@ -411,7 +465,7 @@ BUILTIN("car")
 
     return seq->first();
 }
-
+#endif
 BUILTIN("cadr")
 {
     CHECK_ARGS_IS(1);
@@ -431,7 +485,7 @@ BUILTIN("caddr")
 
     return seq->item(2);
 }
-
+#if 0
 BUILTIN("cdr")
 {
     CHECK_ARGS_IS(1);
@@ -441,28 +495,12 @@ BUILTIN("cdr")
     ARG(malSequence, seq);
     return seq->rest();
 }
-
-// helper foo to cast integer (64 bit) type to char (8 bit) type
-char itoa64(const int64_t &sign)
-{
-    int64_t bit64[8];
-    char result = 0;
-
-    for (int i = 0; i < 8; i++)
-    {
-        bit64[i] = (sign >> i) & 1;
-        if (bit64[i])
-        {
-            result |= 1 << i;
-        }
-    }
-    return result;
-}
+#endif
 
 BUILTIN("chr")
 {
     CHECK_ARGS_IS(1);
-    char sign = 0;
+    unsigned char sign = 0;
 
     if (VAL_IS_FLOAT)
     {
@@ -477,6 +515,14 @@ BUILTIN("chr")
     }
 
     return mal::string(std::string(1 , sign));
+}
+
+BUILTIN("close")
+{
+    CHECK_ARGS_IS(1);
+    ARG(malFile, pf);
+
+    return pf->close();
 }
 
 BUILTIN("concat")
@@ -751,6 +797,17 @@ BUILTIN("nth")
     return seq->item(i);
 }
 
+BUILTIN("open")
+{
+    CHECK_ARGS_IS(2);
+    ARG(malString, filename);
+    ARG(malString, m);
+    const char mode = std::tolower(m->value().c_str()[0]);
+    malFile* pf = new malFile(filename->value().c_str(), mode);
+
+    return pf->open();
+}
+
 BUILTIN("pr-str")
 {
     return mal::string(printValues(argsBegin, argsEnd, " ", true));
@@ -774,6 +831,38 @@ BUILTIN("read-string")
     ARG(malString, str);
 
     return readStr(str->value());
+}
+
+BUILTIN("read-line")
+{
+    if (!CHECK_ARGS_AT_LEAST(0))
+    {
+        String str;
+        std::getline(std::cin, str);
+        return mal::string(str);
+    }
+    ARG(malFile, pf);
+
+    return pf->readLine();
+}
+
+BUILTIN("read-char")
+{
+    if (!CHECK_ARGS_AT_LEAST(0))
+    {
+        unsigned char c = 0;
+        while (! kbhit())
+        {
+            fflush(stdout);
+            c=getchar();
+            break;
+        }
+        std::cout << std::endl;
+        return mal::integer(int(c));
+    }
+    ARG(malFile, pf);
+
+    return pf->readChar();
 }
 
 BUILTIN("readline")
@@ -861,6 +950,34 @@ BUILTIN("str")
     return mal::string(printValues(argsBegin, argsEnd, "", false));
 }
 
+BUILTIN("strcase")
+{
+    int count = CHECK_ARGS_AT_LEAST(1);
+    ARG(malString, str);
+    String trans = str->value();
+
+    if (count > 1)
+    {
+        ARG(malConstant, boolVal);
+        if (boolVal->isTrue())
+        {
+            std::transform(trans.begin(), trans.end(), trans.begin(),
+                   [](unsigned char c){ return std::tolower(c); });
+            return mal::string(trans);
+        }
+    }
+
+    std::transform(trans.begin(), trans.end(), trans.begin(),
+                   [](unsigned char c){ return std::toupper(c); });
+
+    return mal::string(trans);
+}
+
+BUILTIN("strlen")
+{
+    return mal::integer(countValues(argsBegin, argsEnd));
+}
+
 BUILTIN("substr")
 {
     int count = CHECK_ARGS_AT_LEAST(2);
@@ -936,6 +1053,12 @@ BUILTIN("time-ms")
     return mal::integer(ms.count());
 }
 
+BUILTIN("type?")
+{
+    CHECK_ARGS_IS(1);
+    return mal::type(argsBegin->ptr()->type());
+}
+
 BUILTIN("vals")
 {
     CHECK_ARGS_IS(1);
@@ -955,12 +1078,49 @@ BUILTIN("vector")
     return mal::vector(argsBegin, argsEnd);
 }
 
+BUILTIN("ver")
+{
+    return mal::string(VERSION);
+}
+
 BUILTIN("with-meta")
 {
     CHECK_ARGS_IS(2);
     malValuePtr obj  = *argsBegin++;
     malValuePtr meta = *argsBegin++;
     return obj->withMeta(meta);
+}
+
+BUILTIN("write-line")
+{
+    int count = CHECK_ARGS_AT_LEAST(1);
+    ARG(malString, str);
+
+    if (count == 1)
+    {
+        return mal::string(str->value());
+    }
+
+    ARG(malFile, pf);
+
+    return pf->writeLine(str->value());
+}
+
+BUILTIN("write-char")
+{
+    int count = CHECK_ARGS_AT_LEAST(1);
+    ARG(malInteger, c);
+
+    std::cout << itoa64(c->value()) << std::endl;
+
+    if (count == 1)
+    {
+        return mal::integer(c->value());
+    }
+
+    ARG(malFile, pf);
+
+    return pf->writeChar(itoa64(c->value()));
 }
 
 BUILTIN("zero?")
@@ -1002,4 +1162,20 @@ static String printValues(malValueIter begin, malValueIter end,
     }
 
     return out;
+}
+
+static int countValues(malValueIter begin, malValueIter end)
+{
+    int result = 0;
+
+    if (begin != end) {
+        result += (*begin)->print(true).length() -2;
+        ++begin;
+    }
+
+    for ( ; begin != end; ++begin) {
+        result += (*begin)->print(true).length() -2;
+    }
+
+    return result;
 }
