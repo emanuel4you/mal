@@ -186,10 +186,8 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
                 checkArgsIs("repeat*", 2, argCount);
                 const malInteger* loop = VALUE_CAST(malInteger, list->item(1));
 
-                for (int i = 2; i <= argCount; i++) {
-                    for (int j = 1; j < loop->value(); j++) {
-                        EVAL(list->item(i), env);
-                    }
+                for (int i = 1; i < loop->value(); i++) {
+                    EVAL(list->item(argCount), env);
                 }
                 ast = list->item(argCount);
                 continue; // TCO
@@ -237,6 +235,24 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
                     env = malEnvPtr(new malEnv(env));
                     env->set(excSym->value(), excVal);
                     ast = catchBlock->item(2);
+                }
+                continue; // TCO
+            }
+
+            if (special == "while") {
+                checkArgsIs("while", 2, argCount);
+
+                malValuePtr loop = list->item(1);
+                malValuePtr loopBody = list->item(argCount);
+
+                while (1) {
+                    loopBody = EVAL(list->item(argCount), env);
+                    loop = EVAL(list->item(1), env);
+
+                    if (!loop->isTrue()) {
+                        ast = loopBody;
+                        break;
+                    }
                 }
                 continue; // TCO
             }
