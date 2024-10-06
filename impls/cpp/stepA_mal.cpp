@@ -99,6 +99,19 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
             String special = symbol->value();
             int argCount = list->count() - 1;
 
+            if (special == "and") {
+                checkArgsAtLeast("and", 2, argCount);
+                bool isTrue = false;
+
+                for (int i = 1; i < argCount; i++) {
+                    isTrue = EVAL(list->item(i), env)->isTrue();
+                    if (!isTrue) {
+                        break;
+                    }
+                }
+                return isTrue ? mal::trueValue() : mal::falseValue();
+            }
+
             if (special == "def!") {
                 MAL_CHECK(checkArgsAtLeast("def!", 2, argCount) % 2 == 0, "def!: missing value");
                 int i;
@@ -169,6 +182,19 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
                 ast = list->item(2);
                 env = inner;
                 continue; // TCO
+            }
+
+            if (special == "or") {
+                checkArgsAtLeast("or", 2, argCount);
+                bool isTrue = false;
+
+                for (int i = 1; i < argCount; i++) {
+                    isTrue = EVAL(list->item(i), env)->isTrue();
+                    if (isTrue) {
+                        break;
+                    }
+                }
+                return isTrue ? mal::trueValue() : mal::falseValue();
             }
 
             if (special == "quasiquote") {
