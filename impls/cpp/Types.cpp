@@ -2,6 +2,7 @@
 #include "Environment.h"
 #include "Types.h"
 
+#include <iostream>
 #include <algorithm>
 #include <memory>
 #include <typeinfo>
@@ -21,6 +22,9 @@ namespace mal {
         {
             case MALTYPE::ATOM:
                 return typeAtom();
+                break;
+            case MALTYPE::BUILTIN:
+                return typeBuiltin();
                 break;
             case MALTYPE::FILE:
                 return typeFile();
@@ -162,6 +166,10 @@ namespace mal {
 
     malValuePtr typeAtom() {
         static malValuePtr c(new malConstant("ATOM"));
+        return malValuePtr(c);
+    };
+    malValuePtr typeBuiltin() {
+        static malValuePtr c(new malConstant("SUBR"));
         return malValuePtr(c);
     };
     malValuePtr typeFile() {
@@ -564,6 +572,13 @@ malValuePtr malSequence::rest() const
 {
     malValueIter start = (count() > 0) ? begin() + 1 : end();
     return mal::list(start, end());
+}
+
+malValuePtr malSequence::reverse(malValueIter argsBegin, malValueIter argsEnd) const
+{
+    malValueVec* items = new malValueVec(std::distance(argsBegin, argsEnd));
+    std::reverse_copy(argsBegin, argsEnd, items->begin());
+    return mal::list(items);
 }
 
 String malString::escapedValue() const

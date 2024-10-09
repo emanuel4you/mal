@@ -10,7 +10,7 @@
 
 class malEmptyInputException : public std::exception { };
 
-enum class MALTYPE { ATOM, FILE, INT, LIST, MAP, REAL, STR, SYM, UNDEF, VEC, KEYW };
+enum class MALTYPE { ATOM, BUILTIN, FILE, INT, LIST, MAP, REAL, STR, SYM, UNDEF, VEC, KEYW };
 
 class malValue : public RefCounted {
 public:
@@ -255,6 +255,7 @@ public:
                               malValueIter argsEnd) const = 0;
 
     malValuePtr first() const;
+    malValuePtr reverse(malValueIter argsBegin, malValueIter argsEnd) const;
     virtual malValuePtr rest() const;
 
 private:
@@ -361,6 +362,8 @@ public:
 
     String name() const { return m_name; }
 
+    virtual MALTYPE type() const { return MALTYPE::BUILTIN; }
+
     WITH_META(malBuiltIn);
 
 private:
@@ -452,6 +455,7 @@ namespace mal {
     malValuePtr trueValue();
     malValuePtr type(MALTYPE type);
     malValuePtr typeAtom();
+    malValuePtr typeBuiltin();
     malValuePtr typeFile();
     malValuePtr typeInteger();
     malValuePtr typeList();

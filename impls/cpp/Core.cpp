@@ -46,15 +46,23 @@ static const Regex floatPointRegex("[.]{1}\\d+$");
     do { if (VAL_IS_FLOAT) { hasFloat = true; break; } pos++; argsBegin++; } while (argsBegin != argsEnd); \
     for (int i = 0; i != pos; ++i) { argsBegin--; }
 
+#define CHECK_NUMBER_NOT_NIL MAL_CHECK(!VAL_IS_NIL, "number? type is nil value");
+
 #define VAL_IS_FLOAT (argsBegin->ptr()->type() == MALTYPE::REAL)
 
+#define VAL_IS_INT (argsBegin->ptr()->type() == MALTYPE::INT)
+
+#define VAL_IS_NIL (argsBegin->ptr()->print(true).compare("nil") == 0)
+
 #define ADD_INT_VAL(val) \
+    CHECK_NUMBER_NOT_NIL \
     malInteger val = dynamic_cast<malInteger*>(argsBegin->ptr());
 
 #define ADD_FLOAT_VAL(val) \
+    CHECK_NUMBER_NOT_NIL \
     malDouble val = dynamic_cast<malDouble*>(argsBegin->ptr());
 
-#define ADD_LIST_TYPE(val) \
+#define ADD_LIST_VAL(val) \
     malList val = dynamic_cast<malList*>(argsBegin->ptr());
 
 #define SET_INT_VAL(opr, checkDivByZero) \
@@ -136,7 +144,7 @@ static StaticList<malBuiltIn*> handlers;
     return mal::mdouble(floatValue);
 
 #define BUILTIN_INT_VAL(opr, checkDivByZero) \
-    [[maybe_unused]] int16_t intValue = 0; \
+    [[maybe_unused]] int64_t intValue = 0; \
     SET_INT_VAL(+, false); \
     argsBegin++; \
     do { \
@@ -310,8 +318,8 @@ BUILTIN("/=")
 
     return mal::boolean(!lhs->isEqualTo(rhs));
 }
-#if 0
-BUILTIN("~")
+
+BUILTIN("~ ")
 {
     if (VAL_IS_FLOAT)
     {
@@ -323,7 +331,6 @@ BUILTIN("~")
         return mal::integer(~lhs->value());
     }
 }
-#endif
 
 BUILTIN("1+")
 {
@@ -627,6 +634,11 @@ BUILTIN("exit")
     exit(EXIT_SUCCESS);
 }
 
+BUILTIN("exp")
+{
+    BUILTIN_FUNCTION(exp);
+}
+
 BUILTIN("expt")
 {
     CHECK_ARGS_IS(2);
@@ -740,6 +752,15 @@ BUILTIN("keyword")
     MAL_FAIL("keyword expects a keyword or string");
 }
 
+BUILTIN("last")
+{
+    CHECK_ARGS_IS(1);
+    ARG(malSequence, seq);
+
+    MAL_CHECK(0 < seq->count(), "Index out of range");
+    return seq->item(seq->count()-1);
+}
+
 BUILTIN("list")
 {
     return mal::list(argsBegin, argsEnd);
@@ -770,12 +791,150 @@ BUILTIN("map")
     return  mal::list(items);
 }
 
+BUILTIN("max")
+{
+    int count = CHECK_ARGS_AT_LEAST(1);
+    CHECK_ARGS_HAS_FLOAT
+    bool unset = true;
+    [[maybe_unused]] double floatValue;
+    [[maybe_unused]] int64_t intValue;
+
+    if (count == 1)
+    {
+        if (hasFloat) {
+            ADD_FLOAT_VAL(*floatVal);
+            floatValue = floatVal->value();
+            return mal::mdouble(floatValue);
+        }
+        else {
+            ADD_INT_VAL(*intVal);
+            intValue = intVal->value();
+            return mal::integer(intValue);
+        }
+    }
+
+    if (hasFloat) {
+        do {
+            if (VAL_IS_FLOAT) {
+                if (unset) {
+                    unset = false;
+                    ADD_FLOAT_VAL(*floatVal);
+                    floatValue = floatVal->value();
+                }
+                else {
+                    ADD_FLOAT_VAL(*floatVal)
+                    if (floatVal->value() > floatValue) {
+                        floatValue = floatVal->value();
+                    }
+                }
+            }
+            else {
+                if (unset) {
+                    unset = false;
+                    ADD_INT_VAL(*intVal);
+                    floatValue = double(intVal->value());
+                }
+                else {
+                    ADD_INT_VAL(*intVal);
+                    if (intVal->value() > floatValue)
+                    {
+                        floatValue = double(intVal->value());
+                    }
+                }
+            }
+            argsBegin++;
+        } while (argsBegin != argsEnd);
+        return mal::mdouble(floatValue);
+    } else {
+        ADD_INT_VAL(*intVal);
+        intValue = intVal->value();
+        argsBegin++;
+        do {
+            ADD_INT_VAL(*intVal);
+            if (intVal->value() > intValue)
+            {
+                intValue = intVal->value();
+            }
+            argsBegin++;
+        } while (argsBegin != argsEnd);
+        return mal::integer(intValue);
+    }
+}
+
 BUILTIN("meta")
 {
     CHECK_ARGS_IS(1);
     malValuePtr obj = *argsBegin++;
 
     return obj->meta();
+}
+
+BUILTIN("min")
+{
+    int count = CHECK_ARGS_AT_LEAST(1);
+    CHECK_ARGS_HAS_FLOAT
+    bool unset = true;
+    [[maybe_unused]] double floatValue;
+    [[maybe_unused]] int64_t intValue;
+
+    if (count == 1)
+    {
+        if (hasFloat) {
+            ADD_FLOAT_VAL(*floatVal);
+            floatValue = floatVal->value();
+            return mal::mdouble(floatValue);
+        }
+        else {
+            ADD_INT_VAL(*intVal);
+            intValue = intVal->value();
+            return mal::integer(intValue);
+        }
+    }
+
+    if (hasFloat) {
+        do {
+            if (VAL_IS_FLOAT) {
+                if (unset) {
+                    unset = false;
+                    ADD_FLOAT_VAL(*floatVal);
+                    floatValue = floatVal->value();
+                }
+                else {
+                    ADD_FLOAT_VAL(*floatVal)
+                    if (floatVal->value() < floatValue) {
+                        floatValue = floatVal->value();
+                    }
+                }
+            }
+            else {
+                if (unset) {
+                    unset = false;
+                    ADD_INT_VAL(*intVal);
+                    floatValue = double(intVal->value());
+                }
+                else {
+                    ADD_INT_VAL(*intVal);
+                    if (intVal->value() < floatValue) {
+                        floatValue = double(intVal->value());
+                    }
+                }
+            }
+            argsBegin++;
+        } while (argsBegin != argsEnd);
+        return mal::mdouble(floatValue);
+    } else {
+        ADD_INT_VAL(*intVal);
+        intValue = intVal->value();
+        argsBegin++;
+        do {
+            ADD_INT_VAL(*intVal);
+            if (intVal->value() < intValue) {
+                intValue = intVal->value();
+            }
+            argsBegin++;
+        } while (argsBegin != argsEnd);
+        return mal::integer(intValue);
+    }
 }
 
 BUILTIN("number?")
@@ -787,14 +946,27 @@ BUILTIN("number?")
 
 BUILTIN("nth")
 {
+    // twisted parameter for both LISPs!
     CHECK_ARGS_IS(2);
-    ARG(malSequence, seq);
-    ARG(malInteger,  index);
+    CHECK_NUMBER_NOT_NIL
+    int i;
 
-    int i = index->value();
-    MAL_CHECK(i >= 0 && i < seq->count(), "Index out of range");
-
-    return seq->item(i);
+    if(VAL_IS_INT)
+    {
+        ARG(malInteger,  index);
+        ARG(malSequence, seq);
+        i = index->value();
+        MAL_CHECK(i >= 0 && i < seq->count(), "Index out of range");
+        return seq->item(i);
+    }
+    else {
+        ARG(malSequence, seq);
+        CHECK_NUMBER_NOT_NIL
+        ARG(malInteger,  index);
+        i = index->value();
+        MAL_CHECK(i >= 0 && i < seq->count(), "Index out of range");
+        return seq->item(i);
+    }
 }
 
 BUILTIN("open")
@@ -890,6 +1062,16 @@ BUILTIN("rest")
     return seq->rest();
 }
 
+BUILTIN("reverse")
+{
+    CHECK_ARGS_IS(1);
+    if (*argsBegin == mal::nilValue()) {
+        return mal::list(new malValueVec(0));
+    }
+    ARG(malSequence, seq);
+    return seq->reverse(seq->begin(), seq->end());
+}
+
 BUILTIN("seq")
 {
     CHECK_ARGS_IS(1);
@@ -945,6 +1127,26 @@ BUILTIN("sqrt")
     BUILTIN_FUNCTION(sqrt);
 }
 
+BUILTIN("startapp")
+{
+    int count = CHECK_ARGS_AT_LEAST(1);
+    ARG(malString, com);
+    String command = com->value();
+
+    if (count > 1)
+    {
+        ARG(malString, para);
+        command += " ";
+        command += para->value();
+    }
+
+    if (system(command.c_str()))
+    {
+        return mal::nilValue();
+    }
+    return mal::integer(count);
+}
+
 BUILTIN("str")
 {
     return mal::string(printValues(argsBegin, argsEnd, "", false));
@@ -982,6 +1184,7 @@ BUILTIN("substr")
 {
     int count = CHECK_ARGS_AT_LEAST(2);
     ARG(malString, s);
+    CHECK_NUMBER_NOT_NIL
     ARG(malInteger, start);
 
     if (s)
@@ -990,6 +1193,7 @@ BUILTIN("substr")
 
         if (count > 2)
         {
+            CHECK_NUMBER_NOT_NIL
             ARG(malInteger, size);
             if (start && size)
             {
@@ -1056,6 +1260,11 @@ BUILTIN("time-ms")
 BUILTIN("type?")
 {
     CHECK_ARGS_IS(1);
+
+    if (argsBegin->ptr()->print(true).compare("nil") == 0) {
+        return mal::nilValue();
+    }
+
     return mal::type(argsBegin->ptr()->type());
 }
 
@@ -1109,6 +1318,7 @@ BUILTIN("write-line")
 BUILTIN("write-char")
 {
     int count = CHECK_ARGS_AT_LEAST(1);
+    CHECK_NUMBER_NOT_NIL
     ARG(malInteger, c);
 
     std::cout << itoa64(c->value()) << std::endl;
@@ -1135,7 +1345,7 @@ BUILTIN("zero?")
     else
     {
         ADD_INT_VAL(*lhs)
-        return mal::boolean(lhs->value() == 0.0);
+        return mal::boolean(lhs->value() == 0);
     }
 }
 

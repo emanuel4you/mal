@@ -101,18 +101,19 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
 
             if (special == "and") {
                 checkArgsAtLeast("and", 2, argCount);
-                bool isTrue = false;
-
-                for (int i = 1; i < argCount; i++) {
-                    isTrue = EVAL(list->item(i), env)->isTrue();
-                    if (!isTrue) {
-                        break;
+                int value = 0;
+                for (int i = 1; i < argCount+1; i++) {
+                    if (EVAL(list->item(i), env)->isTrue()) {
+                        value |= 1;
+                    }
+                    else {
+                        value |= 2;
                     }
                 }
-                return isTrue ? mal::trueValue() : mal::falseValue();
+                return value == 3 ? mal::falseValue() : mal::trueValue();
             }
 
-            if (special == "def!") {
+            if (special == "def!" || special == "setq") {
                 MAL_CHECK(checkArgsAtLeast("def!", 2, argCount) % 2 == 0, "def!: missing value");
                 int i;
                 for (i = 1; i < argCount - 2; i += 2) {
@@ -186,15 +187,16 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
 
             if (special == "or") {
                 checkArgsAtLeast("or", 2, argCount);
-                bool isTrue = false;
-
-                for (int i = 1; i < argCount; i++) {
-                    isTrue = EVAL(list->item(i), env)->isTrue();
-                    if (isTrue) {
-                        break;
+                int value = 0;
+                for (int i = 1; i < argCount+1; i++) {
+                    if (EVAL(list->item(i), env)->isTrue()) {
+                        value |= 1;
+                    }
+                    else {
+                        value |= 2;
                     }
                 }
-                return isTrue ? mal::trueValue() : mal::falseValue();
+                return value == 3 ? mal::trueValue() : mal::falseValue();
             }
 
             if (special == "quasiquote") {
@@ -369,6 +371,7 @@ static const char* malFunctionTable[] = {
     "(def! car first)",
     "(def! cdr rest)",
     "(def! strcat str)",
+    "(def! append concat)",
     "(def! EOF -1)",
 };
 
