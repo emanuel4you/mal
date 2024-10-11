@@ -10,7 +10,7 @@
 
 class malEmptyInputException : public std::exception { };
 
-enum class MALTYPE { ATOM, BUILTIN, FILE, INT, LIST, MAP, REAL, STR, SYM, UNDEF, VEC, KEYW };
+enum class MALTYPE { ATOM, BUILTIN, BOOLEAN, FILE, INT, LIST, MAP, REAL, STR, SYM, UNDEF, VEC, KEYW };
 
 class malValue : public RefCounted {
 public:
@@ -68,6 +68,14 @@ public:
         : malValue(meta), m_name(that.m_name) { }
 
     virtual String print(bool readably) const { return m_name; }
+
+    virtual MALTYPE type() const {
+        if ((m_name.compare("false") ||
+            (m_name.compare("true")))) {
+            return MALTYPE::BOOLEAN; }
+        else {
+            return MALTYPE::UNDEF; }
+    }
 
     virtual bool doIsEqualTo(const malValue* rhs) const {
         return this == rhs; // these are singletons

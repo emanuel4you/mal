@@ -43,23 +43,70 @@ static const Regex floatPointRegex("[.]{1}\\d+$");
 #define CHECK_ARGS_HAS_FLOAT \
     int pos = 0; \
     bool hasFloat = false; \
-    do { if (VAL_IS_FLOAT) { hasFloat = true; break; } pos++; argsBegin++; } while (argsBegin != argsEnd); \
+    do { if (FLOAT_PTR) { hasFloat = true; break; } pos++; argsBegin++; } while (argsBegin != argsEnd); \
     for (int i = 0; i != pos; ++i) { argsBegin--; }
 
-#define CHECK_NUMBER_NOT_NIL MAL_CHECK(!VAL_IS_NIL, "number? type is nil value");
+#define CHECK_ARG_IS_INT \
+    MAL_CONSTAND_FAIL_CHECK(argsBegin->ptr(), "nil", "number?") \
+    MAL_CONSTAND_FAIL_CHECK(argsBegin->ptr(), "false", "number?") \
+    MAL_CONSTAND_FAIL_CHECK(argsBegin->ptr(), "true", "number?") \
+    if (!(argsBegin->ptr()->type() == MALTYPE::INT)) { \
+        MAL_TYPE_FAIL(argsBegin->ptr(), "number?") \
+    }
 
-#define VAL_IS_FLOAT (argsBegin->ptr()->type() == MALTYPE::REAL)
+#define CHECK_ARG_IS_FLOAT \
+    MAL_CONSTAND_FAIL_CHECK(argsBegin->ptr(), "nil", "number?") \
+    MAL_CONSTAND_FAIL_CHECK(argsBegin->ptr(), "false", "number?") \
+    MAL_CONSTAND_FAIL_CHECK(argsBegin->ptr(), "true", "number?") \
+    if (!(argsBegin->ptr()->type() == MALTYPE::REAL)) { \
+        MAL_TYPE_FAIL(argsBegin->ptr(), "number?") \
+    }
 
-#define VAL_IS_INT (argsBegin->ptr()->type() == MALTYPE::INT)
+#define MALTYPE_ERR_STR(name, prog) \
+        const malValuePtr type = mal::type(name->type()); \
+        const String typeError = "'" + String(prog) + "' type is " + type->print(true);
 
-#define VAL_IS_NIL (argsBegin->ptr()->print(true).compare("nil") == 0)
+#define ERROR_STR_TYPE(name, prog) \
+    "'" prog "' type is " name
+
+#define MAL_TYPE_FAIL(name, nameType) \
+    MALTYPE_ERR_STR(name, nameType) \
+    MAL_FAIL(typeError.c_str());
+
+#define MAL_CONSTAND_FAIL_CHECK(name, c, nameType) MAL_CHECK(!(name->print(true).compare(c) == 0), ERROR_STR_TYPE(c, nameType));
+
+#define CHECK_IS_NUMBER(name) \
+    MAL_CONSTAND_FAIL_CHECK(name, "nil", "number?") \
+    MAL_CONSTAND_FAIL_CHECK(name, "false", "number?") \
+    MAL_CONSTAND_FAIL_CHECK(name, "true", "number?") \
+    if (!(name->type() == MALTYPE::INT) && !(name->type() == MALTYPE::REAL)) { \
+        MAL_TYPE_FAIL(name, "number?") \
+    }
+
+#define CHECK_IS_INT(name) \
+    MAL_CONSTAND_FAIL_CHECK(name, "nil", "number?") \
+    MAL_CONSTAND_FAIL_CHECK(name, "false", "number?") \
+    MAL_CONSTAND_FAIL_CHECK(name, "true", "number?") \
+    if (!(name->type() == MALTYPE::INT)) { \
+        MAL_TYPE_FAIL(name, "number?") \
+    }
+
+#define FLOAT_PTR (argsBegin->ptr()->type() == MALTYPE::REAL)
+
+#define INT_PTR (argsBegin->ptr()->type() == MALTYPE::INT)
+
+#define NIL_PTR (argsBegin->ptr()->print(true).compare("nil") == 0)
+
+#define AG_INT(name) \
+    CHECK_ARG_IS_INT \
+    malInteger* name = VALUE_CAST(malInteger, *argsBegin++)
 
 #define ADD_INT_VAL(val) \
-    CHECK_NUMBER_NOT_NIL \
+    CHECK_ARG_IS_INT \
     malInteger val = dynamic_cast<malInteger*>(argsBegin->ptr());
 
 #define ADD_FLOAT_VAL(val) \
-    CHECK_NUMBER_NOT_NIL \
+    CHECK_ARG_IS_FLOAT \
     malDouble val = dynamic_cast<malDouble*>(argsBegin->ptr());
 
 #define ADD_LIST_VAL(val) \
@@ -72,7 +119,7 @@ static const Regex floatPointRegex("[.]{1}\\d+$");
         MAL_CHECK(intVal->value() != 0, "Division by zero"); }
 
 #define SET_FLOAT_VAL(opr, checkDivByZero) \
-    if (VAL_IS_FLOAT) \
+    if (FLOAT_PTR) \
     { \
         ADD_FLOAT_VAL(*floatVal) \
         floatValue = floatValue opr floatVal->value(); \
@@ -155,7 +202,7 @@ static StaticList<malBuiltIn*> handlers;
 
 #define BUILTIN_FUNCTION(foo) \
     CHECK_ARGS_IS(1); \
-    if (VAL_IS_FLOAT) { \
+    if (FLOAT_PTR) { \
         ADD_FLOAT_VAL(*lhs) \
         return mal::mdouble(foo(lhs->value())); } \
     else { \
@@ -166,10 +213,10 @@ static StaticList<malBuiltIn*> handlers;
     CHECK_ARGS_IS(2); \
     CHECK_ARGS_HAS_FLOAT \
     if (hasFloat) { \
-        if (VAL_IS_FLOAT) { \
+        if (FLOAT_PTR) { \
             ADD_FLOAT_VAL(*floatRhs) \
             argsBegin++; \
-            if (VAL_IS_FLOAT) { \
+            if (FLOAT_PTR) { \
                 ADD_FLOAT_VAL(*floatLhs) \
                 return mal::boolean(floatRhs->value() opr floatLhs->value()); } \
             else { \
@@ -230,6 +277,9 @@ int kbhit()
 }
 
 BUILTIN_ISA("atom?",        malAtom);
+BUILTIN_ISA("double?",      malDouble);
+BUILTIN_ISA("file?",        malFile);
+BUILTIN_ISA("integer?",     malInteger);
 BUILTIN_ISA("keyword?",     malKeyword);
 BUILTIN_ISA("list?",        malList);
 BUILTIN_ISA("map?",         malHash);
@@ -250,7 +300,7 @@ BUILTIN("-")
 {
     if (CHECK_ARGS_AT_LEAST(1) == 1)
     {
-        if (VAL_IS_FLOAT)
+        if (FLOAT_PTR)
         {
             ADD_FLOAT_VAL(*lhs)
             return mal::mdouble(-lhs->value());
@@ -321,7 +371,7 @@ BUILTIN("/=")
 
 BUILTIN("~ ")
 {
-    if (VAL_IS_FLOAT)
+    if (FLOAT_PTR)
     {
         return mal::nilValue();
     }
@@ -335,7 +385,7 @@ BUILTIN("~ ")
 BUILTIN("1+")
 {
     CHECK_ARGS_IS(1);
-    if (VAL_IS_FLOAT)
+    if (FLOAT_PTR)
     {
         ADD_FLOAT_VAL(*lhs)
         return mal::mdouble(lhs->value()+1);
@@ -350,7 +400,7 @@ BUILTIN("1+")
 BUILTIN("1-")
 {
     CHECK_ARGS_IS(1);
-    if (VAL_IS_FLOAT)
+    if (FLOAT_PTR)
     {
         ADD_FLOAT_VAL(*lhs)
         return mal::mdouble(lhs->value()-1);
@@ -365,7 +415,7 @@ BUILTIN("1-")
 BUILTIN("abs")
 {
     CHECK_ARGS_IS(1);
-    if (VAL_IS_FLOAT)
+    if (FLOAT_PTR)
     {
         ADD_FLOAT_VAL(*lhs)
         return mal::mdouble(abs(lhs->value()));
@@ -462,6 +512,15 @@ BUILTIN("atom")
 
     return mal::atom(*argsBegin);
 }
+
+BUILTIN("boolean?")
+{
+    CHECK_ARGS_IS(1);
+    {
+        return mal::boolean(argsBegin->ptr()->type() == MALTYPE::BOOLEAN);
+    }
+}
+
 #if 0
 BUILTIN("car")
 {
@@ -509,7 +568,7 @@ BUILTIN("chr")
     CHECK_ARGS_IS(1);
     unsigned char sign = 0;
 
-    if (VAL_IS_FLOAT)
+    if (FLOAT_PTR)
     {
         ADD_FLOAT_VAL(*lhs)
         auto sign64 = static_cast<std::int64_t>(lhs->value());
@@ -643,11 +702,11 @@ BUILTIN("expt")
 {
     CHECK_ARGS_IS(2);
 
-    if (VAL_IS_FLOAT)
+    if (FLOAT_PTR)
     {
         ADD_FLOAT_VAL(*lhs)
         argsBegin++;
-        if (VAL_IS_FLOAT)
+        if (FLOAT_PTR)
         {
             ADD_FLOAT_VAL(*rhs)
             return mal::mdouble(pow(lhs->value(),
@@ -664,7 +723,7 @@ BUILTIN("expt")
     {
         ADD_INT_VAL(*lhs)
         argsBegin++;
-        if (VAL_IS_FLOAT)
+        if (FLOAT_PTR)
         {
             ADD_FLOAT_VAL(*rhs)
             return mal::mdouble(pow(double(lhs->value()),
@@ -694,7 +753,7 @@ BUILTIN("float")
 {
     CHECK_ARGS_IS(1);
 
-    if (VAL_IS_FLOAT)
+    if (FLOAT_PTR)
     {
         ADD_FLOAT_VAL(*lhs)
         return mal::mdouble(lhs->value());
@@ -796,8 +855,9 @@ BUILTIN("max")
     int count = CHECK_ARGS_AT_LEAST(1);
     CHECK_ARGS_HAS_FLOAT
     bool unset = true;
-    [[maybe_unused]] double floatValue;
-    [[maybe_unused]] int64_t intValue;
+    [[maybe_unused]] double floatValue = 0;
+    [[maybe_unused]] int64_t intValue = 0;
+
 
     if (count == 1)
     {
@@ -815,7 +875,7 @@ BUILTIN("max")
 
     if (hasFloat) {
         do {
-            if (VAL_IS_FLOAT) {
+            if (FLOAT_PTR) {
                 if (unset) {
                     unset = false;
                     ADD_FLOAT_VAL(*floatVal);
@@ -874,8 +934,8 @@ BUILTIN("min")
     int count = CHECK_ARGS_AT_LEAST(1);
     CHECK_ARGS_HAS_FLOAT
     bool unset = true;
-    [[maybe_unused]] double floatValue;
-    [[maybe_unused]] int64_t intValue;
+    [[maybe_unused]] double floatValue = 0;
+    [[maybe_unused]] int64_t intValue = 0;
 
     if (count == 1)
     {
@@ -893,7 +953,7 @@ BUILTIN("min")
 
     if (hasFloat) {
         do {
-            if (VAL_IS_FLOAT) {
+            if (FLOAT_PTR) {
                 if (unset) {
                     unset = false;
                     ADD_FLOAT_VAL(*floatVal);
@@ -937,6 +997,22 @@ BUILTIN("min")
     }
 }
 
+BUILTIN("minus?")
+{
+    CHECK_ARGS_IS(1);
+
+    if (FLOAT_PTR)
+    {
+        ADD_FLOAT_VAL(*lhs)
+        return mal::boolean(lhs->value() < 0.0);
+    }
+    else
+    {
+        ADD_INT_VAL(*lhs)
+        return mal::boolean(lhs->value() < 0);
+    }
+}
+
 BUILTIN("number?")
 {
     CHECK_ARGS_IS(1);
@@ -951,9 +1027,9 @@ BUILTIN("nth")
     CHECK_NUMBER_NOT_NIL
     int i;
 
-    if(VAL_IS_INT)
+    if(INT_PTR)
     {
-        ARG(malInteger,  index);
+        AG_INT(index);
         ARG(malSequence, seq);
         i = index->value();
         MAL_CHECK(i >= 0 && i < seq->count(), "Index out of range");
@@ -961,8 +1037,7 @@ BUILTIN("nth")
     }
     else {
         ARG(malSequence, seq);
-        CHECK_NUMBER_NOT_NIL
-        ARG(malInteger,  index);
+        AG_INT(index);
         i = index->value();
         MAL_CHECK(i >= 0 && i < seq->count(), "Index out of range");
         return seq->item(i);
@@ -978,6 +1053,114 @@ BUILTIN("open")
     malFile* pf = new malFile(filename->value().c_str(), mode);
 
     return pf->open();
+}
+
+BUILTIN("polar")
+{
+    CHECK_ARGS_IS(3);
+    double angle = 0;
+    double dist = 0;
+    double x = 0;
+    double y = 0;
+    [[maybe_unused]] double z = 0;
+
+    ARG(malSequence, seq);
+
+    if (FLOAT_PTR) {
+        ADD_FLOAT_VAL(*floatAngle)
+        angle = floatAngle->value();
+    }
+    else
+    {
+        ADD_INT_VAL(*intAngle)
+        angle = double(intAngle->value());
+    }
+    if (FLOAT_PTR) {
+        ADD_FLOAT_VAL(*floatDist)
+        dist = floatDist->value();
+    }
+    else
+    {
+        ADD_INT_VAL(*intDist)
+        dist = double(intDist->value());
+    }
+
+    if(seq->count() == 2)
+    {
+        CHECK_IS_NUMBER(seq->item(0))
+        if (seq->item(0)->type() == MALTYPE::INT)
+        {
+            const malInteger* intX = VALUE_CAST(malInteger, seq->item(0));
+            x = double(intX->value());
+        }
+        if (seq->item(0)->type() == MALTYPE::REAL)
+        {
+            const malDouble* floatX = VALUE_CAST(malDouble, seq->item(0));
+            x = floatX->value();
+        }
+        CHECK_IS_NUMBER(seq->item(1))
+        if (seq->item(1)->type() == MALTYPE::INT)
+        {
+            const malInteger* intY = VALUE_CAST(malInteger, seq->item(1));
+            y = double(intY->value());
+        }
+        if (seq->item(1)->type() == MALTYPE::REAL)
+        {
+            const malDouble* floatY = VALUE_CAST(malDouble, seq->item(1));
+            y = floatY->value();
+        }
+
+        std::cout << x << y <<std::endl;
+
+        std::cout << x << y <<std::endl;
+
+        malValueVec* items = new malValueVec(2);
+        items->at(0) = mal::mdouble(x + dist * sin(angle));
+        items->at(1) = mal::mdouble(y + dist * cos(angle));
+        return mal::list(items);
+    }
+
+    if(seq->count() == 3)
+    {
+        if (seq->item(0)->type() == MALTYPE::INT)
+        {
+            const malInteger* intX = VALUE_CAST(malInteger, seq->item(0));
+            x = double(intX->value());
+        }
+        if (seq->item(0)->type() == MALTYPE::REAL)
+        {
+            const malDouble* floatX = VALUE_CAST(malDouble, seq->item(0));
+            x = floatX->value();
+        }
+        CHECK_IS_NUMBER(seq->item(1))
+        if (seq->item(1)->type() == MALTYPE::INT)
+        {
+            const malInteger* intY = VALUE_CAST(malInteger, seq->item(1));
+            y = double(intY->value());
+        }
+        if (seq->item(1)->type() == MALTYPE::REAL)
+        {
+            const malDouble* floatY = VALUE_CAST(malDouble, seq->item(1));
+            y = floatY->value();
+        }
+        CHECK_IS_NUMBER(seq->item(2))
+        if (seq->item(2)->type() == MALTYPE::INT)
+        {
+            const malInteger* intY = VALUE_CAST(malInteger, seq->item(2));
+            z = double(intY->value());
+        }
+        if (seq->item(2)->type() == MALTYPE::REAL)
+        {
+            const malDouble* floatY = VALUE_CAST(malDouble, seq->item(2));
+            z = floatY->value();
+        }
+        malValueVec* items = new malValueVec(3);
+        items->at(0) = mal::mdouble(x + dist * sin(angle));
+        items->at(1) = mal::mdouble(y + dist * cos(angle));
+        items->at(2) = mal::mdouble(z);
+        return mal::list(items);
+    }
+    return mal::nilValue();
 }
 
 BUILTIN("pr-str")
@@ -1184,28 +1367,24 @@ BUILTIN("substr")
 {
     int count = CHECK_ARGS_AT_LEAST(2);
     ARG(malString, s);
-    CHECK_NUMBER_NOT_NIL
-    ARG(malInteger, start);
+    AG_INT(start);
+    int startPos = (int)start->value();
 
     if (s)
     {
         std::string bla = s->value();
+        if (startPos > (int)bla.size()+1) {
+            startPos = (int)bla.size()+1;
+        }
 
         if (count > 2)
         {
-            CHECK_NUMBER_NOT_NIL
-            ARG(malInteger, size);
-            if (start && size)
-            {
-                return mal::string(bla.substr(start->value()-1, size->value()));
-            }
+            AG_INT(size);
+            return mal::string(bla.substr(startPos-1, size->value()));
         }
         else
         {
-            if (start)
-            {
-                return mal::string(bla.substr(start->value()-1));
-            }
+                return mal::string(bla.substr(startPos-1, bla.size()));
         }
     }
 
@@ -1318,8 +1497,7 @@ BUILTIN("write-line")
 BUILTIN("write-char")
 {
     int count = CHECK_ARGS_AT_LEAST(1);
-    CHECK_NUMBER_NOT_NIL
-    ARG(malInteger, c);
+    AG_INT(c);
 
     std::cout << itoa64(c->value()) << std::endl;
 
@@ -1337,7 +1515,7 @@ BUILTIN("zero?")
 {
     CHECK_ARGS_IS(1);
 
-    if (VAL_IS_FLOAT)
+    if (FLOAT_PTR)
     {
         ADD_FLOAT_VAL(*lhs)
         return mal::boolean(lhs->value() == 0.0);
