@@ -1110,10 +1110,6 @@ BUILTIN("polar")
             y = floatY->value();
         }
 
-        std::cout << x << y <<std::endl;
-
-        std::cout << x << y <<std::endl;
-
         malValueVec* items = new malValueVec(2);
         items->at(0) = mal::mdouble(x + dist * sin(angle));
         items->at(1) = mal::mdouble(y + dist * cos(angle));

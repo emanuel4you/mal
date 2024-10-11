@@ -11,6 +11,7 @@ static const Regex closeRegex("[\\)\\]}]");
 
 static const Regex whitespaceRegex("[\\s,]+|;.*");
 static const Regex tokenRegexes[] = {
+    Regex("~ "),
     Regex("~@"),
     Regex("[\\[\\]{}()'`~^@]"),
     Regex("\"(?:\\\\.|[^\\\\\"])*\""),
@@ -180,6 +181,10 @@ static malValuePtr readAtom(Tokeniser& tokeniser)
         { "nil",    mal::nilValue()    },
         { "true",   mal::trueValue()   },
         { "pi",     mal::piValue()     },
+        { "!false",  mal::falseValue()  },
+        { "!nil",    mal::nilValue()    },
+        { "!true",   mal::trueValue()   },
+        { "!pi",     mal::piValue()     },
         { "ATOM",   mal::typeAtom()    },
         { "FILE",   mal::typeFile()    },
         { "INT",    mal::typeInteger() },
@@ -218,6 +223,9 @@ static malValuePtr readAtom(Tokeniser& tokeniser)
     }
     if (std::regex_match(token, floatRegex)) {
         return mal::mdouble(token);
+    }
+    if (token[0] == '!') {
+        return mal::symbol(token.erase(0, 1));
     }
     return mal::symbol(token);
 }
