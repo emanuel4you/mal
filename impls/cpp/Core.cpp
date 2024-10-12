@@ -40,34 +40,44 @@ static const Regex floatPointRegex("[.]{1}\\d+$");
     checkArgsAtLeast(name.c_str(), expected, \
                         std::distance(argsBegin, argsEnd))
 
-#define CHECK_ARGS_HAS_FLOAT \
-    int pos = 0; \
-    bool hasFloat = false; \
-    do { if (FLOAT_PTR) { hasFloat = true; break; } pos++; argsBegin++; } while (argsBegin != argsEnd); \
-    for (int i = 0; i != pos; ++i) { argsBegin--; }
+#define FLOAT_PTR \
+    (argsBegin->ptr()->type() == MALTYPE::REAL)
 
-#define CHECK_ARG_IS_INT \
-    MAL_CONSTAND_FAIL_CHECK(argsBegin->ptr(), "nil", "number?") \
-    MAL_CONSTAND_FAIL_CHECK(argsBegin->ptr(), "false", "number?") \
-    MAL_CONSTAND_FAIL_CHECK(argsBegin->ptr(), "true", "number?") \
-    if (!(argsBegin->ptr()->type() == MALTYPE::INT)) { \
-        MAL_TYPE_FAIL(argsBegin->ptr(), "number?") \
+#define INT_PTR \
+    (argsBegin->ptr()->type() == MALTYPE::INT)
+
+#define NIL_PTR \
+    (argsBegin->ptr()->print(true).compare("nil") == 0)
+
+bool argsHasFloat(malValueIter argsBegin, malValueIter argsEnd)
+{
+    for (auto it = argsBegin; it != argsEnd; ++it) {
+        if (FLOAT_PTR) {
+            return true;
+        }
     }
+    return false;
+}
 
-#define CHECK_ARG_IS_FLOAT \
+#define ARGS_HAS_FLOAT \
+    argsHasFloat(argsBegin, argsEnd)
+
+#define CHECK_ARG_IS_NUMBER \
     MAL_CONSTAND_FAIL_CHECK(argsBegin->ptr(), "nil", "number?") \
     MAL_CONSTAND_FAIL_CHECK(argsBegin->ptr(), "false", "number?") \
     MAL_CONSTAND_FAIL_CHECK(argsBegin->ptr(), "true", "number?") \
-    if (!(argsBegin->ptr()->type() == MALTYPE::REAL)) { \
+    if (!(argsBegin->ptr()->type() == MALTYPE::REAL) && \
+        !(argsBegin->ptr()->type() == MALTYPE::INT)) { \
+        std::cout << (int) argsBegin->ptr()->type() << std::endl; \
         MAL_TYPE_FAIL(argsBegin->ptr(), "number?") \
     }
 
 #define MALTYPE_ERR_STR(name, prog) \
         const malValuePtr type = mal::type(name->type()); \
-        const String typeError = "'" + String(prog) + "' type is " + type->print(true);
+        const String typeError = "'" + String(prog) + "': type is " + type->print(true);
 
 #define ERROR_STR_TYPE(name, prog) \
-    "'" prog "' type is " name
+    "'" prog "': type is " name
 
 #define MAL_TYPE_FAIL(name, nameType) \
     MALTYPE_ERR_STR(name, nameType) \
@@ -79,7 +89,7 @@ static const Regex floatPointRegex("[.]{1}\\d+$");
     MAL_CONSTAND_FAIL_CHECK(name, "nil", "number?") \
     MAL_CONSTAND_FAIL_CHECK(name, "false", "number?") \
     MAL_CONSTAND_FAIL_CHECK(name, "true", "number?") \
-    if (!(name->type() == MALTYPE::INT) && !(name->type() == MALTYPE::REAL)) { \
+    if (!(name->type() == MALTYPE::INT) || !(name->type() == MALTYPE::INT)) { \
         MAL_TYPE_FAIL(name, "number?") \
     }
 
@@ -98,15 +108,15 @@ static const Regex floatPointRegex("[.]{1}\\d+$");
 #define NIL_PTR (argsBegin->ptr()->print(true).compare("nil") == 0)
 
 #define AG_INT(name) \
-    CHECK_ARG_IS_INT \
+    CHECK_ARG_IS_NUMBER \
     malInteger* name = VALUE_CAST(malInteger, *argsBegin++)
 
 #define ADD_INT_VAL(val) \
-    CHECK_ARG_IS_INT \
+    CHECK_ARG_IS_NUMBER \
     malInteger val = dynamic_cast<malInteger*>(argsBegin->ptr());
 
 #define ADD_FLOAT_VAL(val) \
-    CHECK_ARG_IS_FLOAT \
+    CHECK_ARG_IS_NUMBER \
     malDouble val = dynamic_cast<malDouble*>(argsBegin->ptr());
 
 #define ADD_LIST_VAL(val) \
@@ -173,8 +183,7 @@ static StaticList<malBuiltIn*> handlers;
 
 #define BUILTIN_VAL(opr, checkDivByZero) \
     CHECK_ARGS_AT_LEAST(2); \
-    CHECK_ARGS_HAS_FLOAT \
-    if (hasFloat) { \
+    if (ARGS_HAS_FLOAT) { \
         BUILTIN_FLOAT_VAL(opr, checkDivByZero) \
     } else { \
         BUILTIN_INT_VAL(opr, checkDivByZero) \
@@ -211,8 +220,7 @@ static StaticList<malBuiltIn*> handlers;
 
 #define BUILTIN_OP_COMPARE(opr) \
     CHECK_ARGS_IS(2); \
-    CHECK_ARGS_HAS_FLOAT \
-    if (hasFloat) { \
+    if (ARGS_HAS_FLOAT) { \
         if (FLOAT_PTR) { \
             ADD_FLOAT_VAL(*floatRhs) \
             argsBegin++; \
@@ -276,6 +284,61 @@ int kbhit()
     return bytesWaiting;
 }
 
+bool compareNat(const String& a, const String& b)
+{
+    //std::cout << a << " " << b << std::endl;
+    if (a.empty()) {
+        return true;
+    }
+    if (b.empty()) {
+        return false;
+    }
+    if (std::isdigit(a[0]) && !std::isdigit(b[0])) {
+        return false;
+    }
+    if (!std::isdigit(a[0]) && std::isdigit(b[0])) {
+        return false;
+    }
+    if (!std::isdigit(a[0]) && !std::isdigit(b[0])) {
+        //std::cout << "HIT no dig" << std::endl;
+        if (a[0] == '.' &&
+            b[0] == '.' &&
+            a.size() > 1 &&
+            b.size() > 1) {
+            return (std::toupper(a[1]) < std::toupper(b[1]));
+        }
+
+        if (std::toupper(a[0]) == std::toupper(b[0])) {
+            return compareNat(a.substr(1), b.substr(1));
+        }
+        return (std::toupper(a[0]) < std::toupper(b[0]));
+    }
+
+    // Both strings begin with digit --> parse both numbers
+    std::istringstream issa(a);
+    std::istringstream issb(b);
+    int ia, ib;
+    issa >> ia;
+    issb >> ib;
+    if (ia != ib)
+        return ia < ib;
+
+    // Numbers are the same --> remove numbers and recurse
+    String anew, bnew;
+    std::getline(issa, anew);
+    std::getline(issb, bnew);
+    return (compareNat(anew, bnew));
+}
+
+template <typename TP>
+std::time_t to_time_t(TP tp)
+{
+    using namespace std::chrono;
+    auto sctp = time_point_cast<system_clock::duration>(tp - TP::clock::now()
+              + system_clock::now());
+    return system_clock::to_time_t(sctp);
+}
+
 BUILTIN_ISA("atom?",        malAtom);
 BUILTIN_ISA("double?",      malDouble);
 BUILTIN_ISA("file?",        malFile);
@@ -312,8 +375,7 @@ BUILTIN("-")
         }
     }
     CHECK_ARGS_AT_LEAST(2);
-    CHECK_ARGS_HAS_FLOAT
-    if (hasFloat) {
+    if (ARGS_HAS_FLOAT) {
         BUILTIN_FLOAT_VAL(-, false);
     } else {
         BUILTIN_INT_VAL(-, false);
@@ -323,8 +385,7 @@ BUILTIN("-")
 BUILTIN("%")
 {
     CHECK_ARGS_AT_LEAST(2);
-    CHECK_ARGS_HAS_FLOAT
-    if (hasFloat) {
+    if (ARGS_HAS_FLOAT) {
         return mal::nilValue();
     } else {
         BUILTIN_INT_VAL(%, false);
@@ -580,7 +641,7 @@ BUILTIN("chr")
         sign = itoa64(lhs->value());
     }
 
-    return mal::string(std::string(1 , sign));
+    return mal::string(String(1 , sign));
 }
 
 BUILTIN("close")
@@ -853,7 +914,7 @@ BUILTIN("map")
 BUILTIN("max")
 {
     int count = CHECK_ARGS_AT_LEAST(1);
-    CHECK_ARGS_HAS_FLOAT
+    bool hasFloat = ARGS_HAS_FLOAT;
     bool unset = true;
     [[maybe_unused]] double floatValue = 0;
     [[maybe_unused]] int64_t intValue = 0;
@@ -932,7 +993,7 @@ BUILTIN("meta")
 BUILTIN("min")
 {
     int count = CHECK_ARGS_AT_LEAST(1);
-    CHECK_ARGS_HAS_FLOAT
+    bool hasFloat = ARGS_HAS_FLOAT;
     bool unset = true;
     [[maybe_unused]] double floatValue = 0;
     [[maybe_unused]] int64_t intValue = 0;
@@ -1024,7 +1085,6 @@ BUILTIN("nth")
 {
     // twisted parameter for both LISPs!
     CHECK_ARGS_IS(2);
-    CHECK_NUMBER_NOT_NIL
     int i;
 
     if(INT_PTR)
@@ -1368,7 +1428,7 @@ BUILTIN("substr")
 
     if (s)
     {
-        std::string bla = s->value();
+        String bla = s->value();
         if (startPos > (int)bla.size()+1) {
             startPos = (int)bla.size()+1;
         }
@@ -1384,7 +1444,7 @@ BUILTIN("substr")
         }
     }
 
-    return mal::string(std::string(""));
+    return mal::string(String(""));
 }
 
 BUILTIN("swap!")
@@ -1465,6 +1525,318 @@ BUILTIN("vector")
 BUILTIN("ver")
 {
     return mal::string(VERSION);
+}
+
+BUILTIN("vl-directory-files")
+{
+    int count = CHECK_ARGS_AT_LEAST(0);
+    int len = 0;
+    String path = "./";
+    malValueVec* items;
+    std::vector<std::filesystem::path> sorted_by_name;
+
+    if (count > 0) {
+        std::cout << "count > 0" << std::endl;
+        ARG(malString, directory);
+        path = directory->value();
+        if (!std::filesystem::exists(path.c_str())) {
+            return mal::nilValue();
+        }
+        if (count > 1 && (NIL_PTR || INT_PTR) && !(count == 2 && (NIL_PTR || INT_PTR))) {
+            std::cout << "count > 1 && NIL_PTR" << std::endl;
+            if (NIL_PTR) {
+                argsBegin++;
+            }
+            // pattern + dirs
+            AG_INT(directories);
+            switch(directories->value())
+            {
+                case -1:
+                    for (const auto & entry : std::filesystem::directory_iterator(path.c_str())) {
+                        if (std::filesystem::is_directory(entry.path()))
+                        {
+                            sorted_by_name.push_back(entry.path().filename());
+                            len++;
+                        }
+                    }
+                    break;
+                case 0:
+                    for (const auto & entry : std::filesystem::directory_iterator(path.c_str())) {
+                        sorted_by_name.push_back(entry.path());
+                        len++;
+                    }
+                    break;
+                case 1:
+                    for (const auto & entry : std::filesystem::directory_iterator(path.c_str())) {
+                        if (!std::filesystem::is_directory(entry.path()))
+                        {
+                            sorted_by_name.push_back(entry.path().filename());
+                            len++;
+                        }
+                    }
+                    break;
+                default: {}
+            }
+        }
+        else if (count > 1 && !(count == 2 && (NIL_PTR || INT_PTR))) {
+            std::cout << "count > 1 && !(count == 2 && (NIL_PTR || INT_PTR))" << std::endl;
+            ARG(malString, pattern);
+            int dir = 3;
+            if (count > 2) {
+                AG_INT(directories2);
+                dir = directories2->value();
+                if (dir > 1 || dir < -1) {
+                    dir = 0;
+                }
+            }
+            // pattern
+            bool hasExt = false;
+            bool hasName = false;
+            String pat = pattern->value();
+            int asterix = (int) pat.find_last_of("*");
+            if (asterix != -1 && (int) pat.size() >= asterix) {
+                hasExt = true;
+            }
+            if (asterix != -1 && (int) pat.size() >= asterix && pat.size() > pat.substr(asterix+1).size() ) {
+                hasName = true;
+            }
+            for (const auto & entry : std::filesystem::directory_iterator(path.c_str())) {
+                if (!std::filesystem::is_directory(entry.path()) &&
+                    hasExt &&
+                    hasName &&
+                    (dir == 3 || dir == 1)) {
+                    if ((int)entry.path().filename().string().find(pat.substr(asterix+1)) != -1 &&
+                        (int)entry.path().filename().string().find(pat.substr(0, asterix)) != -1) {
+                        sorted_by_name.push_back(entry.path().filename());
+                        len++;
+                    }
+                }
+                if (!std::filesystem::is_directory(entry.path()) && !hasExt &&
+                    (int)entry.path().filename().string().find(pat) != -1 && (dir == 3 || dir == 1)) {
+                    sorted_by_name.push_back(entry.path().filename());
+                    len++;
+                }
+                if (std::filesystem::is_directory(entry.path()) && !hasExt &&
+                    (int)entry.path().filename().string().find(pat) != -1  && dir == -1) {
+                    sorted_by_name.push_back(entry.path().filename());
+                    len++;
+                }
+                if ((int)entry.path().string().find(pat) != -1 && dir == 0) {
+                    sorted_by_name.push_back(entry.path());
+                    len++;
+                }
+            }
+        }
+        else {
+            std::cout << "else directory" << std::endl;
+            // directory
+            for (const auto & entry : std::filesystem::directory_iterator(path.c_str())) {
+                if (!std::filesystem::is_directory(entry.path()))
+                {
+                    sorted_by_name.push_back(entry.path().filename());
+                    len++;
+                }
+            }
+        }
+    }
+    else {
+        std::cout << "else current directory" << std::endl;
+        // current directory
+        for (const auto & entry : std::filesystem::directory_iterator(path.c_str())) {
+            if (!std::filesystem::is_directory(entry.path()))
+            {
+                sorted_by_name.push_back(entry.path().filename());
+                len++;
+            }
+        }
+    }
+    std::sort(sorted_by_name.begin(), sorted_by_name.end(), compareNat);
+    items = new malValueVec(len);
+    len = 0;
+    for (const auto & filename : sorted_by_name) {
+        items->at(len) = mal::string(filename);
+        len++;
+    }
+    return items->size() ? mal::list(items) : mal::nilValue();
+}
+
+BUILTIN("vl-file-copy")
+{
+    int count = CHECK_ARGS_AT_LEAST(2);
+    ARG(malString, source);
+    ARG(malString, dest);
+
+    if (count == 3 && argsBegin->ptr()->isTrue()) {
+
+        std::ofstream of;
+        std::ios_base::openmode openmode =
+            std::ios::ate | std::ios::in | std::ios::binary;
+        std::ifstream file(source->value().c_str(), openmode);
+
+        if (file.fail()) {
+            return mal::nilValue();
+        }
+
+        String data;
+        data.reserve(file.tellg());
+        file.seekg(0, std::ios::beg);
+        data.append(std::istreambuf_iterator<char>(file.rdbuf()), std::istreambuf_iterator<char>());
+
+        of.open(dest->value(), std::ios::app);
+        if (!of) {
+            return mal::nilValue();
+        }
+        else {
+            of << data;
+            of.close();
+            return mal::integer(sizeof source->value());
+        }
+    }
+
+    std::error_code err;
+    std::filesystem::copy(source->value(), dest->value(), std::filesystem::copy_options::update_existing, err);
+    if (err) {
+        return mal::nilValue();
+    }
+    return mal::integer(sizeof source->value());
+}
+
+BUILTIN("vl-file-delete")
+{
+    CHECK_ARGS_IS(1);
+    ARG(malString, path);
+    if (!std::filesystem::exists(path->value().c_str())) {
+        return mal::nilValue();
+    }
+    if (std::filesystem::remove(path->value().c_str()))
+    {
+        return mal::trueValue();
+    }
+    return mal::nilValue();
+}
+
+BUILTIN("vl-file-directory-p")
+{
+    CHECK_ARGS_IS(1);
+    ARG(malString, path);
+    const std::filesystem::directory_entry dir(path->value().c_str());
+    if (std::filesystem::exists(path->value().c_str()) &&
+        dir.is_directory()) {
+        return mal::trueValue();
+    }
+    return mal::nilValue();
+}
+
+BUILTIN("vl-file-rename")
+{
+    CHECK_ARGS_IS(2);
+    ARG(malString, path);
+    ARG(malString, newName);
+    if (!std::filesystem::exists(path->value().c_str())) {
+        return mal::nilValue();
+    }
+    std::error_code err;
+    std::filesystem::rename(path->value().c_str(), newName->value().c_str(), err);
+    if (err) {
+        return mal::nilValue();
+    }
+    return mal::trueValue();
+}
+
+BUILTIN("vl-file-size")
+{
+    CHECK_ARGS_IS(1);
+    ARG(malString, path);
+    if (!std::filesystem::exists(path->value().c_str())) {
+        return mal::nilValue();
+    }
+    if (!std::filesystem::is_directory(path->value().c_str())) {
+        return mal::string("0");
+    }
+    try {
+        [[maybe_unused]] auto size = std::filesystem::file_size(path->value().c_str());
+        char str[50];
+        sprintf(str, "%ld", size);
+        return mal::string(str);
+    }
+    catch (std::filesystem::filesystem_error&) {}
+    return mal::nilValue();
+}
+
+BUILTIN("vl-file-systime")
+{
+    CHECK_ARGS_IS(1);
+    ARG(malString, path);
+    if (!std::filesystem::exists(path->value().c_str())) {
+        return mal::nilValue();
+    }
+
+    std::filesystem::file_time_type ftime = std::filesystem::last_write_time(path->value().c_str());
+    std::time_t cftime = to_time_t(ftime); // assuming system_clock
+
+    char buffer[64];
+    int J,M,W,D,h,m,s;
+
+    if (strftime(buffer, sizeof buffer, "%Y %m %w %e %I %M %S", std::localtime(&cftime))) {
+        sscanf (buffer,"%d %d %d %d %d %d %d",&J,&M,&W,&D,&h,&m,&s);
+
+        malValueVec* items = new malValueVec(6);
+        items->at(0) = new malInteger(J);
+        items->at(1) = new malInteger(M);
+        items->at(2) = new malInteger(W);
+        items->at(3) = new malInteger(D);
+        items->at(4) = new malInteger(m);
+        items->at(5) = new malInteger(s);
+        return mal::list(items);
+    }
+    return mal::nilValue();
+}
+
+BUILTIN("vl-filename-base")
+{
+    CHECK_ARGS_IS(1);
+    ARG(malString, path);
+
+    const std::filesystem::path p(path->value());
+    return mal::string(p.stem());
+}
+
+BUILTIN("vl-filename-directory")
+{
+    CHECK_ARGS_IS(1);
+    ARG(malString, path);
+
+    const std::filesystem::path p(path->value());
+    if (!p.has_extension()) {
+        return mal::string(path->value());
+    }
+
+    const auto directory = std::filesystem::path{ p }.parent_path().string();
+    return mal::string(directory);
+}
+
+BUILTIN("vl-filename-extension")
+{
+    CHECK_ARGS_IS(1);
+    ARG(malString, path);
+
+    const std::filesystem::path p(path->value());
+    if (!p.has_extension()) {
+        return mal::nilValue();
+    }
+
+    return mal::string(p.extension());
+}
+
+BUILTIN("vl-mkdir")
+{
+    CHECK_ARGS_IS(1);
+    ARG(malString, dir);
+
+    if(std::filesystem::create_directory(dir->value())) {
+        return mal::trueValue();
+    }
+    return mal::nilValue();
 }
 
 BUILTIN("with-meta")

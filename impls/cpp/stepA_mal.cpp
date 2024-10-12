@@ -114,7 +114,7 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
             }
 
             if (special == "def!" || special == "setq") {
-                MAL_CHECK(checkArgsAtLeast("def!", 2, argCount) % 2 == 0, "def!: missing value");
+                MAL_CHECK(checkArgsAtLeast("def!", 2, argCount) % 2 == 0, "def!: missing odd number");
                 int i;
                 for (i = 1; i < argCount - 2; i += 2) {
                     const malSymbol* id = VALUE_CAST(malSymbol, list->item(i));
@@ -124,7 +124,7 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
                 return env->set(id->value(), EVAL(list->item(i+1), env));
             }
 
-            if (special == "defmacro!") {
+            if (special == "defmacro!" || special == "defun") {
                 checkArgsIs("defmacro!", 2, argCount);
 
                 const malSymbol* id = VALUE_CAST(malSymbol, list->item(1));
@@ -219,6 +219,12 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
                 }
                 ast = list->item(argCount);
                 continue; // TCO
+            }
+
+            if (special == "set") {
+                checkArgsIs("set", 2, argCount);
+                const malSymbol* id = new malSymbol(list->item(1)->print(true));
+                return env->set(id->value(), EVAL(list->item(2), env));
             }
 
             if (special == "try*") {
