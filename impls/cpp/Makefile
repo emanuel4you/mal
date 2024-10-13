@@ -12,7 +12,7 @@ LD=$(CXX)
 AR=ar
 
 DEBUG=-ggdb
-CXXFLAGS=-O3 -Wall $(DEBUG) $(INCPATHS) -std=c++11
+CXXFLAGS=-O3 -Wall $(DEBUG) $(INCPATHS) -std=c++17
 LDFLAGS=-O3 $(DEBUG) $(LIBPATHS) -L. -lreadline -lhistory
 
 LIBSOURCES=Core.cpp Environment.cpp Reader.cpp ReadLine.cpp String.cpp \

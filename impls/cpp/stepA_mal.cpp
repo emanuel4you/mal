@@ -124,7 +124,7 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
                 return env->set(id->value(), EVAL(list->item(i+1), env));
             }
 
-            if (special == "defmacro!" || special == "defun") {
+            if (special == "defmacro!") {
                 checkArgsIs("defmacro!", 2, argCount);
 
                 const malSymbol* id = VALUE_CAST(malSymbol, list->item(1));
@@ -133,7 +133,7 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
                 return env->set(id->value(), mal::macro(*lambda));
             }
 
-            if (special == "do") {
+            if (special == "do" || special == "progn") {
                 checkArgsAtLeast("do", 1, argCount);
 
                 for (int i = 1; i < argCount; i++) {
@@ -143,7 +143,7 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
                 continue; // TCO
             }
 
-            if (special == "fn*") {
+            if (special == "fn*" || special == "lambda") {
                 checkArgsIs("fn*", 2, argCount);
 
                 const malSequence* bindings =
@@ -213,7 +213,6 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
             if (special == "repeat") {
                 checkArgsIs("repeat*", 2, argCount);
                 const malInteger* loop = VALUE_CAST(malInteger, list->item(1));
-
                 for (int i = 1; i < loop->value(); i++) {
                     EVAL(list->item(argCount), env);
                 }
@@ -374,10 +373,10 @@ static const char* malFunctionTable[] = {
     "(def! load-file (fn* (filename) \
         (eval (read-string (str \"(do \" (slurp filename) \"\nnil)\")))))",
     "(def! *host-language* \"C++\")",
+    "(def! append concat)",
     "(def! car first)",
     "(def! cdr rest)",
     "(def! strcat str)",
-    "(def! append concat)",
     "(def! EOF -1)",
 };
 

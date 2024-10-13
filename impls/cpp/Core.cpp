@@ -6,6 +6,7 @@
 #include <chrono>
 #include <fstream>
 #include <iostream>
+#include <filesystem>
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/select.h>
@@ -23,7 +24,6 @@ static const Regex floatPointRegex("[.]{1}\\d+$");
 
 #include <math.h>
 #include <cmath>
-
 #define REL "1.0"
 #define VERSION_STR(rel) "MAL LISP [C++] " rel " (en)"
 #define VERSION VERSION_STR(REL)
@@ -52,7 +52,7 @@ static const Regex floatPointRegex("[.]{1}\\d+$");
 bool argsHasFloat(malValueIter argsBegin, malValueIter argsEnd)
 {
     for (auto it = argsBegin; it != argsEnd; ++it) {
-        if (FLOAT_PTR) {
+        if (it->ptr()->type() == MALTYPE::REAL) {
             return true;
         }
     }
@@ -92,20 +92,6 @@ bool argsHasFloat(malValueIter argsBegin, malValueIter argsEnd)
     if (!(name->type() == MALTYPE::INT) || !(name->type() == MALTYPE::INT)) { \
         MAL_TYPE_FAIL(name, "number?") \
     }
-
-#define CHECK_IS_INT(name) \
-    MAL_CONSTAND_FAIL_CHECK(name, "nil", "number?") \
-    MAL_CONSTAND_FAIL_CHECK(name, "false", "number?") \
-    MAL_CONSTAND_FAIL_CHECK(name, "true", "number?") \
-    if (!(name->type() == MALTYPE::INT)) { \
-        MAL_TYPE_FAIL(name, "number?") \
-    }
-
-#define FLOAT_PTR (argsBegin->ptr()->type() == MALTYPE::REAL)
-
-#define INT_PTR (argsBegin->ptr()->type() == MALTYPE::INT)
-
-#define NIL_PTR (argsBegin->ptr()->print(true).compare("nil") == 0)
 
 #define AG_INT(name) \
     CHECK_ARG_IS_NUMBER \
@@ -492,6 +478,12 @@ BUILTIN("apply")
 {
     CHECK_ARGS_AT_LEAST(2);
     malValuePtr op = *argsBegin++; // this gets checked in APPLY
+
+    // both LISPs
+    if (op->type() == MALTYPE::SYM ||
+        op->type() == MALTYPE::LIST) {
+        op = EVAL(op, NULL);
+    }
 
     // Copy the first N-1 arguments in.
     malValueVec args(argsBegin, argsEnd-1);
@@ -886,6 +878,28 @@ BUILTIN("list")
     return mal::list(argsBegin, argsEnd);
 }
 
+BUILTIN("log")
+{
+    BUILTIN_FUNCTION(log);
+}
+
+BUILTIN("log10")
+{
+    CHECK_ARGS_IS(1);
+    if (FLOAT_PTR) {
+        ADD_FLOAT_VAL(*lhs)
+        if (lhs->value() < 0) {
+            return mal::nilValue();
+        }
+        return mal::mdouble(log10(lhs->value())); }
+    else {
+        ADD_INT_VAL(*lhs)
+        if (lhs->value() < 0) {
+            return mal::nilValue();
+        }
+        return mal::mdouble(log10(lhs->value())); }
+}
+
 BUILTIN("macro?")
 {
     CHECK_ARGS_IS(1);
@@ -911,6 +925,65 @@ BUILTIN("map")
     return  mal::list(items);
 }
 
+BUILTIN("mapcar")
+{
+    int argCount = CHECK_ARGS_AT_LEAST(2);
+    int i = 0;
+    int count = 0;
+    int offset = 0;
+    int listCount = argCount-1;
+    int listCounts[listCount];
+    const malValuePtr op = EVAL(argsBegin++->ptr(), NULL);
+
+    for (auto it = argsBegin++; it != argsEnd; it++) {
+        const malSequence* seq = VALUE_CAST(malSequence, *it);
+        listCounts[i++] = seq->count();
+        offset += seq->count();
+        if (count < seq->count()) {
+            count = seq->count();
+        }
+    }
+
+    int newListCounts[count];
+    malValueVec* valItems[count];
+    malValueVec* items = new malValueVec(offset);
+    malValueVec* result = new malValueVec(count);
+
+    offset = 0;
+    for (auto it = --argsBegin; it != argsEnd; ++it) {
+        const malSequence* seq = STATIC_CAST(malSequence, *it);
+        std::copy(seq->begin(), seq->end(), items->begin() + offset);
+        offset += seq->count();
+    }
+
+    for (auto l = 0; l < count; l++) {
+        newListCounts[l] = 0;
+        valItems[l] = { new malValueVec(listCount+1) };
+        valItems[l]->at(0) = op;
+    }
+
+    offset = 0;
+    for (auto n = 0; n < listCount; n++) {
+        for (auto l = 0; l < count; l++) {
+            if (listCounts[n] > l) {
+                valItems[l]->at(n + 1) = items->at(offset + l);
+                newListCounts[l] += 1;
+            }
+        }
+        offset += listCounts[n];
+    }
+
+    for (auto l = 0; l < count; l++) {
+        for (auto v = listCount - newListCounts[l]; v > 0; v--) {
+            valItems[l]->erase(std::next(valItems[l]->begin()));
+        }
+        malList* List = new malList(valItems[l]);
+        result->at(l) = EVAL(List, NULL);
+    }
+    return mal::list(result);
+}
+
+
 BUILTIN("max")
 {
     int count = CHECK_ARGS_AT_LEAST(1);
@@ -918,7 +991,6 @@ BUILTIN("max")
     bool unset = true;
     [[maybe_unused]] double floatValue = 0;
     [[maybe_unused]] int64_t intValue = 0;
-
 
     if (count == 1)
     {
@@ -1072,6 +1144,15 @@ BUILTIN("minus?")
         ADD_INT_VAL(*lhs)
         return mal::boolean(lhs->value() < 0);
     }
+}
+
+BUILTIN("null")
+{
+    CHECK_ARGS_IS(1);
+    if (NIL_PTR) {
+        return mal::trueValue();
+    }
+    return mal::nilValue();
 }
 
 BUILTIN("number?")
@@ -1282,6 +1363,52 @@ BUILTIN("readline")
     ARG(malString, str);
 
     return readline(str->value());
+}
+
+BUILTIN("rem")
+{
+    CHECK_ARGS_AT_LEAST(2);
+    if (ARGS_HAS_FLOAT) {
+        [[maybe_unused]] double floatValue = 0;
+        if (FLOAT_PTR) {
+            ADD_FLOAT_VAL(*floatVal)
+            floatValue = floatValue + floatVal->value();
+            MAL_CHECK(floatVal->value() != 0.0, "Division by zero");
+    }
+    else {
+        ADD_INT_VAL(*intVal)
+        floatValue = floatValue + double(intVal->value());
+        MAL_CHECK(intVal->value() != 0, "Division by zero");
+    }
+    argsBegin++;
+    do {
+        if (FLOAT_PTR) {
+            ADD_FLOAT_VAL(*floatVal)
+            floatValue = fmod(floatValue, floatVal->value());
+            MAL_CHECK(floatVal->value() != 0.0, "Division by zero");
+        }
+        else {
+            ADD_INT_VAL(*intVal)
+            floatValue = fmod(floatValue, double(intVal->value()));
+            MAL_CHECK(intVal->value() != 0, "Division by zero");
+        }
+        argsBegin++;
+    } while (argsBegin != argsEnd);
+    return mal::mdouble(floatValue);
+    } else {
+        [[maybe_unused]] int64_t intValue = 0;
+        ADD_INT_VAL(*intVal) // +
+        intValue = intValue + intVal->value();
+        MAL_CHECK(intVal->value() != 0, "Division by zero");
+        argsBegin++;
+        do {
+            ADD_INT_VAL(*intVal)
+            intValue = int(fmod(double(intValue), double(intVal->value())));
+            MAL_CHECK(intVal->value() != 0, "Division by zero");
+            argsBegin++;
+        } while (argsBegin != argsEnd);
+        return mal::integer(intValue);
+    }
 }
 
 BUILTIN("reset!")
