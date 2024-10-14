@@ -568,10 +568,20 @@ String malSequence::print(bool readably) const
     return str;
 }
 
+bool malSequence::isDotted() const
+{
+    return ((count() == 3) && (m_items->at(1)->print(true).compare(".") == 0)) ? true : false;
+}
+
 malValuePtr malSequence::rest() const
 {
     malValueIter start = (count() > 0) ? begin() + 1 : end();
     return mal::list(start, end());
+}
+
+malValuePtr malSequence::dotted() const
+{
+    return isDotted() == true ? item(2) : mal::nilValue();
 }
 
 malValuePtr malSequence::reverse(malValueIter argsBegin, malValueIter argsEnd) const

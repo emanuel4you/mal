@@ -375,7 +375,6 @@ static const char* malFunctionTable[] = {
     "(def! *host-language* \"C++\")",
     "(def! append concat)",
     "(def! car first)",
-    "(def! cdr rest)",
     "(def! strcat str)",
     "(def! EOF -1)",
 };

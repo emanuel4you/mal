@@ -252,6 +252,7 @@ public:
     malValueVec* evalItems(malEnvPtr env) const;
     int count() const { return m_items->size(); }
     bool isEmpty() const { return m_items->empty(); }
+    bool isDotted() const;
     malValuePtr item(int index) const { return (*m_items)[index]; }
 
     malValueIter begin() const { return m_items->begin(); }
@@ -265,6 +266,7 @@ public:
     malValuePtr first() const;
     malValuePtr reverse(malValueIter argsBegin, malValueIter argsEnd) const;
     virtual malValuePtr rest() const;
+    virtual malValuePtr dotted() const;
 
 private:
     malValueVec* const m_items;

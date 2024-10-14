@@ -513,6 +513,38 @@ BUILTIN("ascii")
 BUILTIN("assoc")
 {
     CHECK_ARGS_AT_LEAST(1);
+    //both LISPs
+    if (!(argsBegin->ptr()->type() == MALTYPE::MAP)) {
+        malValuePtr op = *argsBegin++;
+        ARG(malSequence, seq);
+
+        const int length = seq->count();
+        malValueVec* items = new malValueVec(length);
+        std::copy(seq->begin(), seq->end(), items->begin());
+
+        for (int i = 0; i < length; i++) {
+            if (items->at(i)->type() == MALTYPE::LIST) {
+                malList* list = VALUE_CAST(malList, items->at(i));
+                if (list->count() == 2) {
+                    malValueVec* duo = new malValueVec(2);
+                    std::copy(list->begin(), list->end(), duo->begin());
+                    if (duo->begin()->ptr()->print(true).compare(op->print(true)) == 0) {
+                        return list;
+                    }
+                }
+                if (list->count() == 3) {
+                    malValueVec* dotted = new malValueVec(3);
+                    std::copy(list->begin(), list->end(), dotted->begin());
+                    if (dotted->begin()->ptr()->print(true).compare(op->print(true)) == 0
+                        && (dotted->at(1)->print(true).compare(".") == 0)
+                    ) {
+                        return list;
+                    }
+                }
+            }
+        }
+        return mal::nilValue();
+    }
     ARG(malHash, hash);
 
     return hash->assoc(argsBegin, argsEnd);
@@ -574,6 +606,23 @@ BUILTIN("boolean?")
     }
 }
 
+BUILTIN("bound?")
+{
+    CHECK_ARGS_IS(1);
+    {
+        if (NIL_PTR) {
+            return mal::nilValue();
+        }
+        else {
+            malValuePtr op = *argsBegin++; // this gets checked in EVAL
+            if(EVAL(op, NULL)->print(true).compare("nil") == 0) {
+                return mal::nilValue();
+            }
+        }
+        return mal::trueValue();
+    }
+}
+
 #if 0
 BUILTIN("car")
 {
@@ -604,7 +653,7 @@ BUILTIN("caddr")
 
     return seq->item(2);
 }
-#if 0
+
 BUILTIN("cdr")
 {
     CHECK_ARGS_IS(1);
@@ -612,9 +661,12 @@ BUILTIN("cdr")
         return mal::list(new malValueVec(0));
     }
     ARG(malSequence, seq);
+    if (seq->isDotted()) {
+            return seq->dotted();
+    }
     return seq->rest();
 }
-#endif
+
 
 BUILTIN("chr")
 {
@@ -675,6 +727,17 @@ BUILTIN("cons")
 {
     CHECK_ARGS_IS(2);
     malValuePtr first = *argsBegin++;
+    malValuePtr second = *argsBegin;
+
+    if (second->type() != MALTYPE::LIST)
+    {
+        malValueVec* items = new malValueVec(3);
+        items->at(0) = first;
+        items->at(1) = new malSymbol(".");
+        items->at(2) = second;
+        return mal::list(items);
+    }
+
     ARG(malSequence, rest);
 
     malValueVec* items = new malValueVec(1 + rest->count());
@@ -743,7 +806,7 @@ BUILTIN("eval")
 BUILTIN("exit")
 {
     CHECK_ARGS_IS(0);
-    exit(EXIT_SUCCESS);
+    throw("application terminated by exit!");
 }
 
 BUILTIN("exp")
@@ -839,6 +902,57 @@ BUILTIN("get")
     }
     ARG(malHash, hash);
     return hash->get(*argsBegin);
+}
+
+BUILTIN("getint")
+{
+    if (CHECK_ARGS_AT_LEAST(0))
+    {
+        ARG(malString, str);
+        std::cout << str->value();
+    }
+    int x = 0;
+    while(1)
+    {
+        std::cin >> x;
+        if (!std::cin.fail()) break;
+        std::cin.clear();
+        std::cin.ignore(10000,'\n');
+        std::cout << "Bad entry. Enter a NUMBER: ";
+    }
+    return mal::integer(x);
+}
+
+BUILTIN("getreal")
+{
+    if (CHECK_ARGS_AT_LEAST(0))
+    {
+        ARG(malString, str);
+        std::cout << str->value();
+    }
+    float x = 0;
+    while(1)
+    {
+        std::cin >> x;
+        if (!std::cin.fail()) break;
+        std::cin.clear();
+        std::cin.ignore(10000,'\n');
+        std::cout << "Bad entry. Enter a NUMBER: ";
+    }
+    return mal::mdouble(x);
+}
+
+
+BUILTIN("getstring")
+{
+    if (CHECK_ARGS_AT_LEAST(0))
+    {
+        ARG(malString, str);
+        std::cout << str->value();
+    }
+    String s = "";
+    std::getline(std::cin >> std::ws, s);
+    return mal::string(s);
 }
 
 BUILTIN("hash-map")
@@ -1052,6 +1166,24 @@ BUILTIN("max")
         } while (argsBegin != argsEnd);
         return mal::integer(intValue);
     }
+}
+
+BUILTIN("member?")
+{
+    CHECK_ARGS_IS(2);
+    malValuePtr op = *argsBegin++;
+    ARG(malSequence, seq);
+
+    const int length = seq->count();
+    malValueVec* items = new malValueVec(length);
+    std::copy(seq->begin(), seq->end(), items->begin());
+
+    for (int i = 0; i < length; i++) {
+        if (items->at(i)->print(true).compare(op->print(true)) == 0) {
+            return mal::trueValue();
+        }
+    }
+    return mal::nilValue();
 }
 
 BUILTIN("meta")
@@ -1317,6 +1449,13 @@ BUILTIN("prn")
     return mal::nilValue();
 }
 
+BUILTIN("prompt")
+{
+    ARG(malString, str);
+    std::cout << str->value();
+    return mal::nilValue();
+}
+
 BUILTIN("read-string")
 {
     CHECK_ARGS_IS(1);
@@ -1574,6 +1713,26 @@ BUILTIN("substr")
     return mal::string(String(""));
 }
 
+BUILTIN("subst")
+{
+    CHECK_ARGS_IS(3);
+    malValuePtr oldSym = *argsBegin++;
+    malValuePtr newSym = *argsBegin++;
+    ARG(malSequence, seq);
+
+    const int length = seq->count();
+    malValueVec* items = new malValueVec(length);
+    std::copy(seq->begin(), seq->end(), items->begin());
+
+    for (int i = 0; i < length; i++) {
+        if (items->at(i)->print(true).compare(oldSym->print(true)) == 0) {
+            items->at(i) = newSym;
+            return mal::list(items);
+        }
+    }
+    return mal::nilValue();
+}
+
 BUILTIN("swap!")
 {
     CHECK_ARGS_AT_LEAST(2);
@@ -1599,6 +1758,12 @@ BUILTIN("symbol")
 BUILTIN("tan")
 {
     BUILTIN_FUNCTION(tan);
+}
+
+BUILTIN("terpri")
+{
+    std::cout << std::endl;
+    return mal::nilValue();
 }
 
 BUILTIN("throw")
@@ -1652,6 +1817,17 @@ BUILTIN("vector")
 BUILTIN("ver")
 {
     return mal::string(VERSION);
+}
+
+BUILTIN("vl-consp")
+{
+    CHECK_ARGS_IS(1);
+    ARG(malSequence, s);
+
+    if(s->isDotted()) {
+        return mal::trueValue();
+    }
+    return mal::nilValue();
 }
 
 BUILTIN("vl-directory-files")
@@ -1962,6 +2138,24 @@ BUILTIN("vl-mkdir")
 
     if(std::filesystem::create_directory(dir->value())) {
         return mal::trueValue();
+    }
+    return mal::nilValue();
+}
+
+BUILTIN("vl-position")
+{
+    CHECK_ARGS_IS(2);
+    malValuePtr op = *argsBegin++; // this gets checked in APPLY
+
+    const malSequence* seq = VALUE_CAST(malSequence, *(argsBegin));
+    for (int i = 0; i < seq->count(); i++) {
+        if(seq->item(i)->print(true).compare(op->print(true)) == 0) {
+            return mal::integer(i);
+        }
+    }
+    return mal::nilValue();
+}
+
     }
     return mal::nilValue();
 }
