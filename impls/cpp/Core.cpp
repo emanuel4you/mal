@@ -206,24 +206,27 @@ static StaticList<malBuiltIn*> handlers;
 
 #define BUILTIN_OP_COMPARE(opr) \
     CHECK_ARGS_IS(2); \
+    if (((argsBegin->ptr()->type() == MALTYPE::LIST) && ((argsBegin + 1)->ptr()->type() == MALTYPE::LIST)) || \
+        ((argsBegin->ptr()->type() == MALTYPE::VEC) && ((argsBegin + 1)->ptr()->type() == MALTYPE::VEC))) { \
+        ARG(malSequence, lhs); \
+        ARG(malSequence, rhs); \
+        return mal::boolean(lhs->count() opr rhs->count()); } \
     if (ARGS_HAS_FLOAT) { \
         if (FLOAT_PTR) { \
-            ADD_FLOAT_VAL(*floatRhs) \
+            ADD_FLOAT_VAL(*floatLhs) \
             argsBegin++; \
             if (FLOAT_PTR) { \
-                ADD_FLOAT_VAL(*floatLhs) \
-                return mal::boolean(floatRhs->value() opr floatLhs->value()); } \
+                ADD_FLOAT_VAL(*floatRhs) \
+                return mal::boolean(floatLhs->value() opr floatRhs->value()); } \
             else { \
-               ADD_INT_VAL(*intLhs) \
-               return mal::boolean(floatRhs->value() opr double(intLhs->value())); } } \
+               ADD_INT_VAL(*intRhs) \
+               return mal::boolean(floatLhs->value() opr double(intRhs->value())); } } \
         else { \
-            ADD_INT_VAL(*intRhs) \
+            ADD_INT_VAL(*intLhs) \
             argsBegin++; \
-            ADD_FLOAT_VAL(*floatLhs) \
-            return mal::boolean(double(intRhs->value()) opr floatLhs->value()); } } \
+            ADD_FLOAT_VAL(*floatRhs) \
+            return mal::boolean(double(intLhs->value()) opr floatRhs->value()); } } \
     else { \
-        ADD_INT_VAL(*intRhs) \
-        argsBegin++; \
         ADD_INT_VAL(*intLhs) \
         return mal::boolean(intRhs->value() opr intLhs->value()); }
 
@@ -729,7 +732,9 @@ BUILTIN("cons")
     malValuePtr first = *argsBegin++;
     malValuePtr second = *argsBegin;
 
-    if (second->type() != MALTYPE::LIST)
+    if (second->type() == MALTYPE::INT ||
+        second->type() == MALTYPE::REAL ||
+        second->type() == MALTYPE::STR)
     {
         malValueVec* items = new malValueVec(3);
         items->at(0) = first;

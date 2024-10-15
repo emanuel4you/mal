@@ -376,6 +376,11 @@ static const char* malFunctionTable[] = {
     "(def! append concat)",
     "(def! car first)",
     "(def! strcat str)",
+    "(def! type type?)",
+    "(def! listp list?)",
+    "(def! minusp minus?)",
+    "(def! numberp number?)",
+    "(def! zerop zero?)",
     "(def! EOF -1)",
 };
 

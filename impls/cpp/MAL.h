@@ -14,7 +14,7 @@ typedef std::vector<malValuePtr> malValueVec;
 typedef malValueVec::iterator    malValueIter;
 
 class malEnv;
-typedef RefCountedPtr<malEnv>     malEnvPtr;
+typedef RefCountedPtr<malEnv>    malEnvPtr;
 
 // step*.cpp
 extern malValuePtr APPLY(malValuePtr op,
