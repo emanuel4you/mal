@@ -203,10 +203,8 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
 
             if (special == "minus?" || special == "minusp" ) {
                 checkArgsIs(special.c_str(), 1, argCount);
-                if (list->item(argCount)->type() == MALTYPE::REAL)
-                {
-                    CHECK_IS_NUMBER(list->item(1))
-                    malDouble* val = VALUE_CAST(malDouble, list->item(1));
+                if (EVAL(list->item(1), env)->type() == MALTYPE::REAL) {
+                    malDouble* val = VALUE_CAST(malDouble, EVAL(list->item(1), env));
                     if (special == "minus?") {
                         return mal::boolean(val->value() < 0.0);
                     }
@@ -214,10 +212,8 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
                         return val->value() < 0 ? mal::trueValue() : mal::nilValue();
                     }
                 }
-                else
-                {
-                    CHECK_IS_NUMBER(list->item(1))
-                    malInteger* val = VALUE_CAST(malInteger, list->item(1));
+                else if (EVAL(list->item(1), env)->type() == MALTYPE::INT) {
+                    malInteger* val = VALUE_CAST(malInteger, EVAL(list->item(1), env));
                     if (special == "minus?") {
                         return mal::boolean(val->value() < 0);
                     }
@@ -225,18 +221,21 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
                         return val->value() < 0 ? mal::trueValue() : mal::nilValue();
                     }
                 }
+                else {
+                        return special == "minus?" ? mal::falseValue() : mal::nilValue();
+                }
             }
 
             if (special == "number?" || special == "numberp") {
                 checkArgsIs(special.c_str(), 1, argCount);
 
                 if (special == "number?") {
-                    return mal::boolean(DYNAMIC_CAST(malInteger, list->item(1)) ||
-                                        DYNAMIC_CAST(malDouble, list->item(1)));
+                    return mal::boolean(DYNAMIC_CAST(malInteger, EVAL(list->item(1), env)) ||
+                                        DYNAMIC_CAST(malDouble, EVAL(list->item(1), env)));
                 }
                 else {
-                    return (DYNAMIC_CAST(malInteger, list->item(1)) ||
-                            DYNAMIC_CAST(malDouble, list->item(1))) ? mal::trueValue() : mal::nilValue();
+                    return (DYNAMIC_CAST(malInteger, EVAL(list->item(1), env)) ||
+                            DYNAMIC_CAST(malDouble, EVAL(list->item(1), env))) ? mal::trueValue() : mal::nilValue();
                 }
             }
 
@@ -345,12 +344,9 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
                 continue; // TCO
             }
             if (special == "zero?" || special == "zerop") {
-                checkArgsIs(special.c_str(), 1, argCount);
-
-                if (list->item(argCount)->type() == MALTYPE::REAL)
-                {
-                    CHECK_IS_NUMBER(list->item(1))
-                    malDouble* val = VALUE_CAST(malDouble, list->item(1));
+                                checkArgsIs(special.c_str(), 1, argCount);
+                if (EVAL(list->item(1), env)->type() == MALTYPE::REAL) {
+                    malDouble* val = VALUE_CAST(malDouble, EVAL(list->item(1), env));
                     if (special == "zero?") {
                         return mal::boolean(val->value() == 0.0);
                     }
@@ -358,16 +354,17 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
                         return val->value() == 0 ? mal::trueValue() : mal::nilValue();
                     }
                 }
-                else
-                {
-                    CHECK_IS_NUMBER(list->item(1))
-                    malInteger* val = VALUE_CAST(malInteger, list->item(1));
+                else if (EVAL(list->item(1), env)->type() == MALTYPE::INT) {
+                    malInteger* val = VALUE_CAST(malInteger, EVAL(list->item(1), env));
                     if (special == "zero?") {
                         return mal::boolean(val->value() == 0);
                     }
                     else {
                         return val->value() == 0 ? mal::trueValue() : mal::nilValue();
                     }
+                }
+                else {
+                        return special == "zero?" ? mal::falseValue() : mal::nilValue();
                 }
             }
         }
