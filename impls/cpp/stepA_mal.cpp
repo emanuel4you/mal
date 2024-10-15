@@ -113,8 +113,24 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
                 return value == 3 ? mal::falseValue() : mal::trueValue();
             }
 
+            if (special == "bound?" || special == "boundp") {
+                checkArgsIs(special.c_str(), 1, argCount);
+                {
+                    if (list->item(1)->print(true).compare("nil") == 0) {
+                        return special == "bound?" ? mal::falseValue() : mal::nilValue();
+                    }
+                    else {
+                            malEnvPtr sym = env->find(list->item(1)->print(true));
+                            if(!sym) {
+                                return special == "bound?" ? mal::falseValue() : mal::nilValue();
+                            }
+                    }
+                    return mal::trueValue();
+                }
+            }
+
             if (special == "def!" || special == "setq") {
-                MAL_CHECK(checkArgsAtLeast("def!", 2, argCount) % 2 == 0, "def!: missing odd number");
+                MAL_CHECK(checkArgsAtLeast(special.c_str(), 2, argCount) % 2 == 0, "def!: missing odd number");
                 int i;
                 for (i = 1; i < argCount - 2; i += 2) {
                     const malSymbol* id = VALUE_CAST(malSymbol, list->item(i));
@@ -134,7 +150,7 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
             }
 
             if (special == "do" || special == "progn") {
-                checkArgsAtLeast("do", 1, argCount);
+                checkArgsAtLeast(special.c_str(), 1, argCount);
 
                 for (int i = 1; i < argCount; i++) {
                     EVAL(list->item(i), env);
@@ -144,7 +160,7 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
             }
 
             if (special == "fn*" || special == "lambda") {
-                checkArgsIs("fn*", 2, argCount);
+                checkArgsIs(special.c_str(), 2, argCount);
 
                 const malSequence* bindings =
                     VALUE_CAST(malSequence, list->item(1));
@@ -183,6 +199,45 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
                 ast = list->item(2);
                 env = inner;
                 continue; // TCO
+            }
+
+            if (special == "minus?" || special == "minusp" ) {
+                checkArgsIs(special.c_str(), 1, argCount);
+                if (list->item(argCount)->type() == MALTYPE::REAL)
+                {
+                    CHECK_IS_NUMBER(list->item(1))
+                    malDouble* val = VALUE_CAST(malDouble, list->item(1));
+                    if (special == "minus?") {
+                        return mal::boolean(val->value() < 0.0);
+                    }
+                    else {
+                        return val->value() < 0 ? mal::trueValue() : mal::nilValue();
+                    }
+                }
+                else
+                {
+                    CHECK_IS_NUMBER(list->item(1))
+                    malInteger* val = VALUE_CAST(malInteger, list->item(1));
+                    if (special == "minus?") {
+                        return mal::boolean(val->value() < 0);
+                    }
+                    else {
+                        return val->value() < 0 ? mal::trueValue() : mal::nilValue();
+                    }
+                }
+            }
+
+            if (special == "number?" || special == "numberp") {
+                checkArgsIs(special.c_str(), 1, argCount);
+
+                if (special == "number?") {
+                    return mal::boolean(DYNAMIC_CAST(malInteger, list->item(1)) ||
+                                        DYNAMIC_CAST(malDouble, list->item(1)));
+                }
+                else {
+                    return (DYNAMIC_CAST(malInteger, list->item(1)) ||
+                            DYNAMIC_CAST(malDouble, list->item(1))) ? mal::trueValue() : mal::nilValue();
+                }
             }
 
             if (special == "or") {
@@ -289,6 +344,32 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
                 }
                 continue; // TCO
             }
+            if (special == "zero?" || special == "zerop") {
+                checkArgsIs(special.c_str(), 1, argCount);
+
+                if (list->item(argCount)->type() == MALTYPE::REAL)
+                {
+                    CHECK_IS_NUMBER(list->item(1))
+                    malDouble* val = VALUE_CAST(malDouble, list->item(1));
+                    if (special == "zero?") {
+                        return mal::boolean(val->value() == 0.0);
+                    }
+                    else {
+                        return val->value() == 0 ? mal::trueValue() : mal::nilValue();
+                    }
+                }
+                else
+                {
+                    CHECK_IS_NUMBER(list->item(1))
+                    malInteger* val = VALUE_CAST(malInteger, list->item(1));
+                    if (special == "zero?") {
+                        return mal::boolean(val->value() == 0);
+                    }
+                    else {
+                        return val->value() == 0 ? mal::trueValue() : mal::nilValue();
+                    }
+                }
+            }
         }
 
         // Now we're left with the case of a regular list to be evaluated.
@@ -377,10 +458,6 @@ static const char* malFunctionTable[] = {
     "(def! car first)",
     "(def! strcat str)",
     "(def! type type?)",
-    "(def! listp list?)",
-    "(def! minusp minus?)",
-    "(def! numberp number?)",
-    "(def! zerop zero?)",
     "(def! EOF -1)",
 };
 

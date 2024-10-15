@@ -56,9 +56,7 @@ malValuePtr malEnv::get(const String& symbol)
             return it->second;
         }
     }
-    //MAL_FAIL("'%s' not found", symbol.c_str());
-    std::cout << "'" << symbol << "' not found!" << std::endl;
-    return mal::nilValue();
+    MAL_FAIL("'%s' not found", symbol.c_str());
 }
 
 malValuePtr malEnv::set(const String& symbol, malValuePtr value)

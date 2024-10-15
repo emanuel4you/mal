@@ -62,47 +62,16 @@ bool argsHasFloat(malValueIter argsBegin, malValueIter argsEnd)
 #define ARGS_HAS_FLOAT \
     argsHasFloat(argsBegin, argsEnd)
 
-#define CHECK_ARG_IS_NUMBER \
-    MAL_CONSTAND_FAIL_CHECK(argsBegin->ptr(), "nil", "number?") \
-    MAL_CONSTAND_FAIL_CHECK(argsBegin->ptr(), "false", "number?") \
-    MAL_CONSTAND_FAIL_CHECK(argsBegin->ptr(), "true", "number?") \
-    if (!(argsBegin->ptr()->type() == MALTYPE::REAL) && \
-        !(argsBegin->ptr()->type() == MALTYPE::INT)) { \
-        std::cout << (int) argsBegin->ptr()->type() << std::endl; \
-        MAL_TYPE_FAIL(argsBegin->ptr(), "number?") \
-    }
-
-#define MALTYPE_ERR_STR(name, prog) \
-        const malValuePtr type = mal::type(name->type()); \
-        const String typeError = "'" + String(prog) + "': type is " + type->print(true);
-
-#define ERROR_STR_TYPE(name, prog) \
-    "'" prog "': type is " name
-
-#define MAL_TYPE_FAIL(name, nameType) \
-    MALTYPE_ERR_STR(name, nameType) \
-    MAL_FAIL(typeError.c_str());
-
-#define MAL_CONSTAND_FAIL_CHECK(name, c, nameType) MAL_CHECK(!(name->print(true).compare(c) == 0), ERROR_STR_TYPE(c, nameType));
-
-#define CHECK_IS_NUMBER(name) \
-    MAL_CONSTAND_FAIL_CHECK(name, "nil", "number?") \
-    MAL_CONSTAND_FAIL_CHECK(name, "false", "number?") \
-    MAL_CONSTAND_FAIL_CHECK(name, "true", "number?") \
-    if (!(name->type() == MALTYPE::INT) || !(name->type() == MALTYPE::INT)) { \
-        MAL_TYPE_FAIL(name, "number?") \
-    }
-
 #define AG_INT(name) \
-    CHECK_ARG_IS_NUMBER \
+    CHECK_IS_NUMBER(argsBegin->ptr()) \
     malInteger* name = VALUE_CAST(malInteger, *argsBegin++)
 
 #define ADD_INT_VAL(val) \
-    CHECK_ARG_IS_NUMBER \
+    CHECK_IS_NUMBER(argsBegin->ptr()) \
     malInteger val = dynamic_cast<malInteger*>(argsBegin->ptr());
 
 #define ADD_FLOAT_VAL(val) \
-    CHECK_ARG_IS_NUMBER \
+    CHECK_IS_NUMBER(argsBegin->ptr()) \
     malDouble val = dynamic_cast<malDouble*>(argsBegin->ptr());
 
 #define ADD_LIST_VAL(val) \
@@ -611,23 +580,6 @@ BUILTIN("boolean?")
     }
 }
 
-BUILTIN("bound?")
-{
-    CHECK_ARGS_IS(1);
-    {
-        if (NIL_PTR) {
-            return mal::nilValue();
-        }
-        else {
-            malValuePtr op = *argsBegin++; // this gets checked in EVAL
-            if(EVAL(op, NULL)->print(true).compare("nil") == 0) {
-                return mal::nilValue();
-            }
-        }
-        return mal::trueValue();
-    }
-}
-
 #if 0
 BUILTIN("car")
 {
@@ -999,6 +951,12 @@ BUILTIN("list")
     return mal::list(argsBegin, argsEnd);
 }
 
+BUILTIN("listp")
+{
+    CHECK_ARGS_IS(1);
+    return (DYNAMIC_CAST(malList, *argsBegin)) ? mal::trueValue() : mal::nilValue();
+}
+
 BUILTIN("log")
 {
     BUILTIN_FUNCTION(log);
@@ -1269,22 +1227,6 @@ BUILTIN("min")
     }
 }
 
-BUILTIN("minus?")
-{
-    CHECK_ARGS_IS(1);
-
-    if (FLOAT_PTR)
-    {
-        ADD_FLOAT_VAL(*lhs)
-        return mal::boolean(lhs->value() < 0.0);
-    }
-    else
-    {
-        ADD_INT_VAL(*lhs)
-        return mal::boolean(lhs->value() < 0);
-    }
-}
-
 BUILTIN("null")
 {
     CHECK_ARGS_IS(1);
@@ -1292,13 +1234,6 @@ BUILTIN("null")
         return mal::trueValue();
     }
     return mal::nilValue();
-}
-
-BUILTIN("number?")
-{
-    CHECK_ARGS_IS(1);
-    return mal::boolean(DYNAMIC_CAST(malInteger, *argsBegin)
-                    || DYNAMIC_CAST(malDouble, *argsBegin));
 }
 
 BUILTIN("nth")
@@ -1314,6 +1249,12 @@ BUILTIN("nth")
         i = index->value();
         MAL_CHECK(i >= 0 && i < seq->count(), "Index out of range");
         return seq->item(i);
+    }
+    else if(FLOAT_PTR) {
+        // add dummy for error msg
+        AG_INT(index);
+        [[maybe_unused]] const String dummy = index->print(true);
+        return mal::nilValue();
     }
     else {
         ARG(malSequence, seq);
@@ -2201,22 +2142,6 @@ BUILTIN("write-char")
     ARG(malFile, pf);
 
     return pf->writeChar(itoa64(c->value()));
-}
-
-BUILTIN("zero?")
-{
-    CHECK_ARGS_IS(1);
-
-    if (FLOAT_PTR)
-    {
-        ADD_FLOAT_VAL(*lhs)
-        return mal::boolean(lhs->value() == 0.0);
-    }
-    else
-    {
-        ADD_INT_VAL(*lhs)
-        return mal::boolean(lhs->value() == 0);
-    }
 }
 
 void installCore(malEnvPtr env) {
