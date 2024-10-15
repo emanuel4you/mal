@@ -150,6 +150,9 @@ static StaticList<malBuiltIn*> handlers;
 
 #define BUILTIN(symbol)  BUILTIN_DEF(__LINE__, symbol)
 
+#define BUILIN_ALIAS(uniq) \
+    FUNCNAME(uniq)(name, argsBegin, argsEnd)
+
 #define BUILTIN_ISA(symbol, type) \
     BUILTIN(symbol) { \
         CHECK_ARGS_IS(1); \
@@ -405,7 +408,9 @@ BUILTIN(">")
 
 BUILTIN("=")
 {
+
     CHECK_ARGS_IS(2);
+
     const malValue* lhs = (*argsBegin++).ptr();
     const malValue* rhs = (*argsBegin++).ptr();
 
@@ -665,6 +670,7 @@ BUILTIN("cdr")
     if (*argsBegin == mal::nilValue()) {
         return mal::list(new malValueVec(0));
     }
+
     ARG(malSequence, seq);
     if (seq->isDotted()) {
             return seq->dotted();
@@ -701,6 +707,17 @@ BUILTIN("close")
     return pf->close();
 }
 
+BUILTIN("command")
+{
+    CHECK_ARGS_AT_LEAST(1);
+    for (auto it = argsBegin; it != argsEnd; ++it) {
+        const malValuePtr arg = *it;
+        std::cout << "parameter: " << it->ptr()->print(true) << "type: " << (int)it->ptr()->type() << std::endl;
+    }
+
+    return mal::nilValue();
+}
+
 BUILTIN("concat")
 {
     int count = 0;
@@ -719,7 +736,13 @@ BUILTIN("concat")
 
     return mal::list(items);
 }
-
+#if 0
+BUILTIN("bla")
+{
+    return BUILIN_ALIAS(543);
+    //return builtIn540(name, argsBegin, argsEnd);
+}
+#endif
 BUILTIN("conj")
 {
     CHECK_ARGS_AT_LEAST(1);
@@ -1390,6 +1413,10 @@ BUILTIN("polar")
             y = floatY->value();
         }
 
+        std::cout << x << y <<std::endl;
+
+        std::cout << x << y <<std::endl;
+
         malValueVec* items = new malValueVec(2);
         items->at(0) = mal::mdouble(x + dist * sin(angle));
         items->at(1) = mal::mdouble(y + dist * cos(angle));
@@ -1556,6 +1583,7 @@ BUILTIN("rem")
         return mal::integer(intValue);
     }
 }
+
 
 BUILTIN("reset!")
 {
@@ -1795,7 +1823,7 @@ BUILTIN("type?")
 {
     CHECK_ARGS_IS(1);
 
-    if (argsBegin->ptr()->print(true).compare("nil") == 0) {
+    if (argsBegin->ptr()->print(false).compare("nil") == 0) {
         return mal::nilValue();
     }
 
@@ -2138,6 +2166,32 @@ BUILTIN("vl-filename-extension")
     return mal::string(p.extension());
 }
 
+BUILTIN("vl-filename-mktemp")
+{
+#if 0
+    int count = CHECK_ARGS_AT_LEAST(0);
+    //const std::filesystem::temp_directory_path():
+    String path = "";
+
+    if (count == 0) {
+        path = std::tmpnam(nullptr);
+        if (count == 1) {
+            ARG(malString, pattern);
+            //path = std::tmpnam(pattern->value());
+            if (count == 2) {
+                ARG(malString, directory);
+
+                if (count == 3) {
+                    ARG(malString, extension);
+
+                }
+            }
+        }
+    }
+#endif
+    return mal::nilValue();
+}
+
 BUILTIN("vl-mkdir")
 {
     CHECK_ARGS_IS(1);
@@ -2163,6 +2217,19 @@ BUILTIN("vl-position")
     return mal::nilValue();
 }
 
+BUILTIN("symbol")
+{
+    CHECK_ARGS_IS(1);
+
+    std::cout << argsBegin->ptr()->print(true) << std::endl;
+    std::cout << (int) argsBegin->ptr()->type() << std::endl;
+
+    if(argsBegin->ptr()->type() == MALTYPE::SYM) {
+        return mal::trueValue();
+    }
+    return mal::nilValue();
+}
+
 BUILTIN("with-meta")
 {
     CHECK_ARGS_IS(2);
@@ -2174,6 +2241,7 @@ BUILTIN("with-meta")
 BUILTIN("write-line")
 {
     int count = CHECK_ARGS_AT_LEAST(1);
+    //multi
     ARG(malString, str);
 
     if (count == 1)
