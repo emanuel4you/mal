@@ -2156,10 +2156,6 @@ BUILTIN("vl-position")
     return mal::nilValue();
 }
 
-    }
-    return mal::nilValue();
-}
-
 BUILTIN("with-meta")
 {
     CHECK_ARGS_IS(2);
