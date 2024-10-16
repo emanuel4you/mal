@@ -177,22 +177,47 @@ static malValuePtr readAtom(Tokeniser& tokeniser)
         malValuePtr value;
     };
     Constant constantTable[] = {
-        { "false",  mal::falseValue()  },
-        { "nil",    mal::nilValue()    },
-        { "true",   mal::trueValue()   },
-        { "pi",     mal::piValue()     },
-        { "!false", mal::falseValue()  },
-        { "!nil",   mal::nilValue()    },
-        { "!true",  mal::trueValue()   },
-        { "!pi",    mal::piValue()     },
-        { "ATOM",   mal::typeAtom()    },
-        { "FILE",   mal::typeFile()    },
-        { "INT",    mal::typeInteger() },
-        { "LIST",   mal::typeList()    },
-        { "REAL",   mal::typeReal()    },
-        { "STR",    mal::typeString()  },
-        { "VEC",    mal::typeVector()  },
-        { "KEYW",   mal::typeKeword()  },
+        { "false",      mal::falseValue()  },
+        { "nil",        mal::nilValue()    },
+        { "true",       mal::trueValue()   },
+        { "pi",         mal::piValue()     },
+        { "!false",     mal::falseValue()  },
+        { "!nil",       mal::nilValue()    },
+        { "!true",      mal::trueValue()   },
+        { "!pi",        mal::piValue()     },
+        { "ATOM",       mal::typeAtom()    },
+        { "FILE",       mal::typeFile()    },
+        { "INT",        mal::typeInteger() },
+        { "LIST",       mal::typeList()    },
+        { "REAL",       mal::typeReal()    },
+        { "STR",        mal::typeString()  },
+        { "VEC",        mal::typeVector()  },
+        { "KEYW",       mal::typeKeword()  },
+        { "and",        mal::builtin(true, "and") },
+        { "bound?",    mal::builtin(true, "bound?") },
+        { "boundp",     mal::builtin(true, "boundp") },
+        { "setq",       mal::builtin(true, "setq") },
+        { "defn",        mal::builtin(true, "def!") },
+        { "defmacro",   mal::builtin(true, "defmacro!") },
+        { "do",         mal::builtin(true, "do") },
+        { "fn",        mal::builtin(true, "fn*") },
+        { "if",         mal::builtin(true, "if") },
+        { "lambda",     mal::builtin(true, "lambda") },
+        { "let*",        mal::builtin(true, "let*") },
+        { "minus?",    mal::builtin(true, "minus?") },
+        { "minusp",     mal::builtin(true, "minusp") },
+        { "number?",   mal::builtin(true, "number?") },
+        { "numberp",    mal::builtin(true, "numberp") },
+        { "or",         mal::builtin(true, "or") },
+        { "progn",      mal::builtin(true, "progn") },
+        { "quasiquote", mal::builtin(true, "quasiquote") },
+        { "quote",      mal::builtin(true, "quote") },
+        { "repeat",     mal::builtin(true, "repeat") },
+        { "set",        mal::builtin(true, "set") },
+        { "try*",        mal::builtin(true, "try*") },
+        { "while",      mal::builtin(true, "while") },
+        { "zero?",     mal::builtin(true, "zero?") },
+        { "zerop",      mal::builtin(true, "zerop") },
     };
 
     String token = tokeniser.next();
@@ -208,6 +233,19 @@ static malValuePtr readAtom(Tokeniser& tokeniser)
         // Note that meta and value switch places
         return mal::list(mal::symbol("with-meta"), value, meta);
     }
+
+    /*
+     * Routin crashes wenn using:
+     * 'def!', 'defmacro!' or 'fn*' (!,* << on)
+     * as a constant.token, crashes on those three const chars ??
+     *
+     * Throw:
+     * >> terminate called after throwing an instance of 'std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >'
+     *
+     * using alias to avoid.
+     *
+     */
+
     for (auto &constant : constantTable) {
         if (token == constant.token) {
             return constant.value;

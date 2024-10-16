@@ -356,6 +356,9 @@ public:
     malBuiltIn(const String& name, ApplyFunc* handler)
     : m_name(name), m_handler(handler) { }
 
+    malBuiltIn(bool eval, const String& name)
+    : m_inEval(eval), m_name(name) { }
+
     malBuiltIn(const malBuiltIn& that, malValuePtr meta)
     : malApplicable(meta), m_name(that.m_name), m_handler(that.m_handler) { }
 
@@ -377,6 +380,7 @@ public:
     WITH_META(malBuiltIn);
 
 private:
+    bool m_inEval;
     const String m_name;
     ApplyFunc* m_handler;
 };
@@ -442,6 +446,7 @@ namespace mal {
     malValuePtr atom(malValuePtr value);
     malValuePtr boolean(bool value);
     malValuePtr builtin(const String& name, malBuiltIn::ApplyFunc handler);
+    malValuePtr builtin(bool eval, const String&);
     malValuePtr falseValue();
     malValuePtr file(const char *path, const char &mode);
     malValuePtr hash(malValueIter argsBegin, malValueIter argsEnd,

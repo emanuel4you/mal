@@ -62,6 +62,10 @@ namespace mal {
         return malValuePtr(new malBuiltIn(name, handler));
     };
 
+    malValuePtr builtin(bool eval, const String& name) {
+        return malValuePtr(new malBuiltIn(eval, name));
+    };
+
     malValuePtr falseValue() {
         static malValuePtr c(new malConstant("false"));
         return malValuePtr(c);

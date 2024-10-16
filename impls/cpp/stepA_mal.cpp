@@ -455,6 +455,9 @@ static const char* malFunctionTable[] = {
     "(def! car first)",
     "(def! strcat str)",
     "(def! type type?)",
+    "(def! def! defn)",
+    "(def! defmacro! defmacro)",
+    "(def! fn* fn)",
     "(def! EOF -1)",
 };
 
