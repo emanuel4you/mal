@@ -13,7 +13,7 @@ AR=ar
 
 DEBUG=-ggdb
 CXXFLAGS=-O3 -Wall $(DEBUG) $(INCPATHS) -std=c++17
-LDFLAGS=-O3 $(DEBUG) $(LIBPATHS) -L. -lreadline -lhistory
+LDFLAGS=-O3 $(DEBUG) $(LIBPATHS) -L. -lreadline -lhistory -ltinfo
 
 LIBSOURCES=Core.cpp Environment.cpp Reader.cpp ReadLine.cpp String.cpp \
 			Types.cpp Validation.cpp
