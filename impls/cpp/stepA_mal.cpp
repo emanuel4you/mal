@@ -7,10 +7,52 @@
 #include <iostream>
 #include <memory>
 
+#define MAX_FUNC 34
+
+static const char* malEvalFunctionTable[MAX_FUNC] = {
+    "and",
+    "bound?",
+    "boundp",
+    "def!",
+    "defun",
+    "defmacro!",
+    "do",
+    "fn*",
+    "getkword",
+    "getvar",
+    "if",
+    "initget",
+    "lambda",
+    "load_dialog",
+    "let*",
+    "minus?",
+    "minusp",
+    "number?",
+    "numberp",
+    "new_dialog",
+    "or",
+    "progn",
+    "quasiquote",
+    "quote",
+    "repeat",
+    "set",
+    "setq",
+    "setvar",
+    "trace",
+    "try*",
+    "untrace",
+    "while",
+    "zero?",
+    "zerop"
+};
+
+
 malValuePtr READ(const String& input);
 String PRINT(malValuePtr ast);
 static void installFunctions(malEnvPtr env);
 //  Installs functions, macros and constants implemented in MAL.
+static void installEvalCore(malEnvPtr env);
+//  Installs functions from EVAL, implemented in MAL.
 
 static void makeArgv(malEnvPtr env, int argc, char* argv[]);
 static String safeRep(const String& input, malEnvPtr env);
@@ -25,6 +67,7 @@ int main(int argc, char* argv[])
     String prompt = "user> ";
     String input;
     installCore(replEnv);
+    installEvalCore(replEnv);
     installFunctions(replEnv);
     makeArgv(replEnv, argc - 2, argv + 2);
     if (argc > 1) {
@@ -453,17 +496,21 @@ static const char* malFunctionTable[] = {
     "(def! *host-language* \"C++\")",
     "(def! append concat)",
     "(def! car first)",
+    "(def! length count)",
     "(def! strcat str)",
     "(def! type type?)",
-    "(def! def! defn)",
-    "(def! defmacro! defmacro)",
-    "(def! fn* fn)",
     "(def! EOF -1)",
 };
 
 static void installFunctions(malEnvPtr env) {
     for (auto &function : malFunctionTable) {
         rep(function, env);
+    }
+}
+
+static void installEvalCore(malEnvPtr env) {
+    for (auto &function : malEvalFunctionTable) {
+        env->set(function, mal::builtin(true, function));
     }
 }
 
