@@ -30,7 +30,7 @@ all: $(TARGETS)
 
 dist: mal
 
-mal: stepA_mal
+mal: stepB_mal
 	cp $< $@
 
 .deps: *.cpp *.h
