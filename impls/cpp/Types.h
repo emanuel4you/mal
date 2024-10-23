@@ -47,7 +47,7 @@ protected:
 template<class T>
 T* value_cast(malValuePtr obj, const char* typeName) {
     T* dest = dynamic_cast<T*>(obj.ptr());
-    MAL_CHECK(dest != NULL, "%s is not a %s",
+    MAL_CHECK(dest != NULL, "'%s' is not a %s",
               obj->print(true).c_str(), typeName);
     return dest;
 }
@@ -143,9 +143,9 @@ public:
         : malValue(meta), m_value(that.m_value) { }
 
     virtual String print(bool) const {
-        String path = "#<file ";
+        String path = "#<file \"";
         path += m_path;
-        path += " >";
+        path += "\">";
         return path;
     }
 
@@ -465,6 +465,7 @@ namespace mal {
     malValuePtr mdouble(double value);
     malValuePtr mdouble(const String& token);
     malValuePtr nilValue();
+    malValuePtr nullValue();
     malValuePtr string(const String& token);
     malValuePtr symbol(const String& token);
     malValuePtr trueValue();

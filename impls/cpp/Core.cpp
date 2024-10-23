@@ -8,6 +8,7 @@
 #include <iostream>
 #include <filesystem>
 #include <stdio.h>
+#include <cstdlib>
 #include <unistd.h>
 #include <sys/select.h>
 #include <termios.h>
@@ -15,6 +16,8 @@
 
 /* temp defined */
 #include <regex>
+
+unsigned int tmpFileCount = 0;
 
 typedef std::regex Regex;
 
@@ -824,6 +827,22 @@ BUILTIN("first")
     return seq->first();
 }
 
+BUILTIN("fix")
+{
+    CHECK_ARGS_IS(1);
+
+    if (FLOAT_PTR)
+    {
+        ADD_FLOAT_VAL(*lhs)
+        return mal::integer(floor(lhs->value()));
+    }
+    else
+    {
+        ADD_INT_VAL(*lhs)
+        return mal::integer(lhs->value());
+    }
+}
+
 BUILTIN("float")
 {
     CHECK_ARGS_IS(1);
@@ -861,6 +880,18 @@ BUILTIN("get")
     }
     ARG(malHash, hash);
     return hash->get(*argsBegin);
+}
+
+BUILTIN("getenv")
+{
+    CHECK_ARGS_IS(1);
+    ARG(malString, str);
+
+    if (const char* env_p = std::getenv(str->value().c_str())) {
+        String env = env_p;
+        return mal::string(env);
+    }
+    return mal::nilValue();
 }
 
 BUILTIN("getint")
@@ -904,11 +935,13 @@ BUILTIN("getreal")
 
 BUILTIN("getstring")
 {
-    if (CHECK_ARGS_AT_LEAST(0))
+    int count = CHECK_ARGS_AT_LEAST(0);
+    if (count == 2)
     {
-        ARG(malString, str);
-        std::cout << str->value();
+        argsBegin++;
     }
+    ARG(malString, str);
+    std::cout << str->value();
     String s = "";
     std::getline(std::cin >> std::ws, s);
     return mal::string(s);
@@ -960,6 +993,53 @@ BUILTIN("listp")
 BUILTIN("log")
 {
     BUILTIN_FUNCTION(log);
+}
+
+BUILTIN("logand")
+{
+    int argCount = CHECK_ARGS_AT_LEAST(0);
+    int result = 0;
+    [[maybe_unused]] double floatValue = 0;
+    [[maybe_unused]] int64_t intValue = 0;
+
+    if (argCount == 0) {
+        return mal::integer(0);
+    }
+    else {
+        CHECK_IS_NUMBER(argsBegin->ptr());
+        if (INT_PTR) {
+            ADD_INT_VAL(*intVal);
+            intValue = intVal->value();
+            if (argCount == 1) {
+                return mal::integer(intValue);
+            }
+            else {
+                result = intValue;
+            }
+        }
+        else {
+            ADD_FLOAT_VAL(*floatVal);
+            floatValue = floatVal->value();
+            if (argCount == 1) {
+                return mal::integer(int(floatValue));
+            }
+            else {
+                result = int(floatValue);
+            }
+        }
+    }
+    for (auto it = argsBegin; it != argsEnd; it++) {
+        CHECK_IS_NUMBER(it->ptr());
+        if (it->ptr()->type() == MALTYPE::INT) {
+            const malInteger* i = VALUE_CAST(malInteger, *it);
+            result = result & i->value();
+        }
+        else {
+            const malDouble* i = VALUE_CAST(malDouble, *it);
+            result = result & int(i->value());
+        }
+    }
+    return mal::integer(result);
 }
 
 BUILTIN("log10")
@@ -1385,15 +1465,522 @@ BUILTIN("pr-str")
     return mal::string(printValues(argsBegin, argsEnd, " ", true));
 }
 
+BUILTIN("prin1")
+{
+    int args = CHECK_ARGS_BETWEEN(0, 2);
+    if (args == 0) {
+        std::cout << std::endl;
+        return mal::nullValue();
+    }
+    malFile* pf = NULL;
+    MALTYPE type = argsBegin->ptr()->type();
+    String boolean = argsBegin->ptr()->print(true);
+    malValueIter value = argsBegin;
+
+    if (args == 2) {
+        argsBegin++;
+        if (argsBegin->ptr()->print(true).compare("nil") != 0) {
+            pf = VALUE_CAST(malFile, *argsBegin);
+        }
+    }
+    if (boolean == "nil") {
+        if (pf) {
+            pf->writeLine("\"nil\"");
+        }
+        else {
+            std::cout << "\"nil\"";
+        }
+            return mal::nilValue();
+    }
+    if (boolean == "false") {
+        if (pf) {
+            pf->writeLine("\"false\"");
+        }
+        else {
+            std::cout << "\"false\"";
+        }
+            return mal::falseValue();
+    }
+    if (boolean == "true") {
+        if (pf) {
+            pf->writeLine("\"true\"");
+        }
+        else {
+            std::cout << "\"true\"";
+        }
+            return mal::trueValue();
+    }
+    if (boolean == "T") {
+        if (pf) {
+            pf->writeLine("\"T\"");
+        }
+        else {
+            std::cout << "\"T\"";
+        }
+            return mal::trueValue();
+    }
+
+    switch(type) {
+        case MALTYPE::FILE: {
+            malFile* f = VALUE_CAST(malFile, *value);
+            char filePtr[32];
+            sprintf(filePtr, "%p", f->value());
+            const String file = filePtr;
+            if (pf) {
+                pf->writeLine("\"" + file + "\"");
+            }
+            else {
+                std::cout << "\"" << file << "\"";
+            }
+            return f;
+        }
+        case MALTYPE::INT: {
+            malInteger* i = VALUE_CAST(malInteger, *value);
+            if (pf) {
+                pf->writeLine("\"" + i->print(true) + "\"");
+            }
+            else {
+                std::cout << "\"" << i->print(true) << "\"";
+            }
+            return i;
+        }
+        case MALTYPE::LIST: {
+            malList* list = VALUE_CAST(malList, *value);
+            if (pf) {
+                pf->writeLine("\"" + list->print(true) + "\"");
+            }
+            else {
+                std::cout << "\"" << list->print(true) << "\"";
+            }
+            return list;
+        }
+        case MALTYPE::MAP: {
+            malHash* hash = VALUE_CAST(malHash, *value);
+            if (pf) {
+                pf->writeLine("\"" + hash->print(true) + "\"");
+            }
+            else {
+                std::cout << "\"" << hash->print(true) << "\"";
+            }
+            return hash;
+         }
+        case MALTYPE::REAL: {
+            malDouble* d = VALUE_CAST(malDouble, *value);
+            if (pf) {
+                pf->writeLine("\"" + d->print(true) + "\"");
+            }
+            else {
+                std::cout << "\"" << d->print(true) << "\"";
+            }
+            return d;
+        }
+        case MALTYPE::STR: {
+            malString* str = VALUE_CAST(malString, *value);
+            if (pf) {
+                pf->writeLine("\"" + str->value() + "\"");
+            }
+            else {
+                std::cout << "\"" << str->value() << "\"";
+            }
+            return str;
+        }
+        case MALTYPE::SYM: {
+            malSymbol* sym = VALUE_CAST(malSymbol, *value);
+            if (pf) {
+                pf->writeLine("\"" + sym->value() + "\"");
+            }
+            else {
+                std::cout << "\"" << sym->value() << "\"";
+            }
+            return sym;
+        }
+        case MALTYPE::VEC: {
+            malVector* vector = VALUE_CAST(malVector, *value);
+            if (pf) {
+                pf->writeLine("\"" + vector->print(true) + "\"");
+            }
+            else {
+                std::cout << "\"" << vector->print(true) << "\"";
+            }
+            return vector;
+        }
+        case MALTYPE::KEYW: {
+            malKeyword* keyword = VALUE_CAST(malKeyword, *value);
+            if (pf) {
+                pf->writeLine("\"" + keyword->print(true) + "\"");
+            }
+            else {
+                std::cout << "\"" << keyword->print(true) << "\"";
+            }
+            return keyword;
+        }
+        default: {
+            if (pf) {
+                pf->writeLine("\"nil\"");
+            }
+            else {
+                std::cout << "\"nil\"";
+            }
+            return mal::nilValue();
+        }
+    }
+
+    if (pf) {
+        pf->writeLine("\"nil\"");
+    }
+    else {
+        std::cout << "\"nil\"";
+    }
+        return mal::nilValue();
+}
+
+BUILTIN("princ")
+{
+    int args = CHECK_ARGS_BETWEEN(0, 2);
+    if (args == 0) {
+        std::cout << std::endl;
+        return mal::nullValue();
+    }
+    malFile* pf = NULL;
+    MALTYPE type = argsBegin->ptr()->type();
+    String boolean = argsBegin->ptr()->print(true);
+    malValueIter value = argsBegin;
+
+    if (args == 2) {
+        argsBegin++;
+        if (argsBegin->ptr()->print(true).compare("nil") != 0) {
+            pf = VALUE_CAST(malFile, *argsBegin);
+        }
+    }
+    if (boolean == "nil") {
+        if (pf) {
+            pf->writeLine("nil");
+        }
+        else {
+            std::cout << "nil";
+        }
+            return mal::nilValue();
+    }
+    if (boolean == "false") {
+        if (pf) {
+            pf->writeLine("false");
+        }
+        else {
+            std::cout << "false";
+        }
+            return mal::falseValue();
+    }
+    if (boolean == "true") {
+        if (pf) {
+            pf->writeLine("true");
+        }
+        else {
+            std::cout << "true";
+        }
+            return mal::trueValue();
+    }
+    if (boolean == "T") {
+        if (pf) {
+            pf->writeLine("T");
+        }
+        else {
+            std::cout << "T";
+        }
+            return mal::trueValue();
+    }
+
+    switch(type) {
+        case MALTYPE::FILE: {
+            malFile* f = VALUE_CAST(malFile, *value);
+            char filePtr[32];
+            sprintf(filePtr, "%p", f->value());
+            const String file = filePtr;
+            if (pf) {
+                pf->writeLine(file);
+            }
+            else {
+                std::cout << file;
+            }
+            return f;
+        }
+        case MALTYPE::INT: {
+            malInteger* i = VALUE_CAST(malInteger, *value);
+            if (pf) {
+                pf->writeLine(i->print(true));
+            }
+            else {
+                std::cout << i->print(true);
+            }
+            return i;
+        }
+        case MALTYPE::LIST: {
+            malList* list = VALUE_CAST(malList, *value);
+            if (pf) {
+                pf->writeLine(list->print(true));
+            }
+            else {
+                std::cout << list->print(true);
+            }
+            return list;
+        }
+        case MALTYPE::MAP: {
+            malHash* hash = VALUE_CAST(malHash, *value);
+            if (pf) {
+                pf->writeLine(hash->print(true));
+            }
+            else {
+                std::cout << hash->print(true);
+            }
+            return hash;
+         }
+        case MALTYPE::REAL: {
+            malDouble* d = VALUE_CAST(malDouble, *value);
+            if (pf) {
+                pf->writeLine(d->print(true));
+            }
+            else {
+                std::cout << d->print(true);
+            }
+            return d;
+        }
+        case MALTYPE::STR: {
+            malString* str = VALUE_CAST(malString, *value);
+            if (pf) {
+                pf->writeLine(str->value());
+            }
+            else {
+                std::cout << str->value();
+            }
+            return str;
+        }
+        case MALTYPE::SYM: {
+            malSymbol* sym = VALUE_CAST(malSymbol, *value);
+            if (pf) {
+                pf->writeLine(sym->value());
+            }
+            else {
+                std::cout << sym->value();
+            }
+            return sym;
+        }
+        case MALTYPE::VEC: {
+            malVector* vector = VALUE_CAST(malVector, *value);
+            if (pf) {
+                pf->writeLine(vector->print(true));
+            }
+            else {
+                std::cout << vector->print(true);
+            }
+            return vector;
+        }
+        case MALTYPE::KEYW: {
+            malKeyword* keyword = VALUE_CAST(malKeyword, *value);
+            if (pf) {
+                pf->writeLine(keyword->print(true));
+            }
+            else {
+                std::cout << keyword->print(true);
+            }
+            return keyword;
+        }
+        default: {
+            if (pf) {
+                pf->writeLine("nil");
+            }
+            else {
+                std::cout << "nil";
+            }
+            return mal::nilValue();
+        }
+    }
+
+    if (pf) {
+        pf->writeLine("nil");
+    }
+    else {
+        std::cout << "nil";
+    }
+        return mal::nilValue();
+}
+
+BUILTIN("print")
+{
+    int args = CHECK_ARGS_BETWEEN(0, 2);
+    if (args == 0) {
+        std::cout << std::endl;
+        return mal::nullValue();
+    }
+    malFile* pf = NULL;
+    MALTYPE type = argsBegin->ptr()->type();
+    String boolean = argsBegin->ptr()->print(true);
+    malValueIter value = argsBegin;
+
+    if (args == 2) {
+        argsBegin++;
+        if (argsBegin->ptr()->print(true).compare("nil") != 0) {
+            pf = VALUE_CAST(malFile, *argsBegin);
+        }
+    }
+    if (boolean == "nil") {
+        if (pf) {
+            pf->writeLine("\n\"nil\" ");
+        }
+        else {
+            std::cout << "\n\"nil\" ";
+        }
+            return mal::nilValue();
+    }
+    if (boolean == "false") {
+        if (pf) {
+            pf->writeLine("\n\"false\" ");
+        }
+        else {
+            std::cout << "\n\"false\" ";
+        }
+            return mal::falseValue();
+    }
+    if (boolean == "true") {
+        if (pf) {
+            pf->writeLine("\n\"true\" ");
+        }
+        else {
+            std::cout << "\n\"true\" ";
+        }
+            return mal::trueValue();
+    }
+    if (boolean == "T") {
+        if (pf) {
+            pf->writeLine("\n\"T\" ");
+        }
+        else {
+            std::cout << "\n\"T\" ";
+        }
+            return mal::trueValue();
+    }
+
+    switch(type) {
+        case MALTYPE::FILE: {
+            malFile* f = VALUE_CAST(malFile, *value);
+            char filePtr[32];
+            sprintf(filePtr, "%p", f->value());
+            const String file = filePtr;
+            if (pf) {
+                pf->writeLine("\n\"" + file + "\" ");
+            }
+            else {
+                std::cout << "\n\"" << file << "\" ";
+            }
+            return f;
+        }
+        case MALTYPE::INT: {
+            malInteger* i = VALUE_CAST(malInteger, *value);
+            if (pf) {
+                pf->writeLine("\n\"" + i->print(true) + "\" ");
+            }
+            else {
+                std::cout << "\n\"" << i->print(true) << "\" ";
+            }
+            return i;
+        }
+        case MALTYPE::LIST: {
+            malList* list = VALUE_CAST(malList, *value);
+            if (pf) {
+                pf->writeLine("\n\"" + list->print(true) + "\" ");
+            }
+            else {
+                std::cout << "\n\"" << list->print(true) << "\" ";
+            }
+            return list;
+        }
+        case MALTYPE::MAP: {
+            malHash* hash = VALUE_CAST(malHash, *value);
+            if (pf) {
+                pf->writeLine("\n\"" + hash->print(true) + "\" ");
+            }
+            else {
+                std::cout << "\n\"" << hash->print(true) << "\" ";
+            }
+            return hash;
+         }
+        case MALTYPE::REAL: {
+            malDouble* d = VALUE_CAST(malDouble, *value);
+            if (pf) {
+                pf->writeLine("\n\"" + d->print(true) + "\" ");
+            }
+            else {
+                std::cout << "\n\"" << d->print(true) << "\" ";
+            }
+            return d;
+        }
+        case MALTYPE::STR: {
+            malString* str = VALUE_CAST(malString, *value);
+            if (pf) {
+                pf->writeLine("\n\"" + str->value() + "\" ");
+            }
+            else {
+                std::cout << "\n\"" << str->value() << "\" ";
+            }
+            return str;
+        }
+        case MALTYPE::SYM: {
+            malSymbol* sym = VALUE_CAST(malSymbol, *value);
+            if (pf) {
+                pf->writeLine("\n\"" + sym->value() + "\" ");
+            }
+            else {
+                std::cout << "\n\"" << sym->value() << "\" ";
+            }
+            return sym;
+        }
+        case MALTYPE::VEC: {
+            malVector* vector = VALUE_CAST(malVector, *value);
+            if (pf) {
+                pf->writeLine("\n\"" + vector->print(true) + "\" ");
+            }
+            else {
+                std::cout << "\n\"" << vector->print(true) << "\" ";
+            }
+            return vector;
+        }
+        case MALTYPE::KEYW: {
+            malKeyword* keyword = VALUE_CAST(malKeyword, *value);
+            if (pf) {
+                pf->writeLine("\n\"" + keyword->print(true) + "\" ");
+            }
+            else {
+                std::cout << "\n\"" << keyword->print(true) << "\" ";
+            }
+            return keyword;
+        }
+        default: {
+            if (pf) {
+                pf->writeLine("\n\"nil\" ");
+            }
+            else {
+                std::cout << "\n\"nil\" ";
+            }
+            return mal::nilValue();
+        }
+    }
+
+    if (pf) {
+        pf->writeLine("\n\"nil\" ");
+    }
+    else {
+        std::cout << "\n\"nil\" ";
+    }
+        return mal::nilValue();
+}
+
 BUILTIN("println")
 {
-    std::cout << printValues(argsBegin, argsEnd, " ", false) << "\n";
+    std::cout << printValues(argsBegin, argsEnd, " ", false) << std::endl;
     return mal::nilValue();
 }
 
 BUILTIN("prn")
 {
-    std::cout << printValues(argsBegin, argsEnd, " ", true) << "\n";
+    std::cout << printValues(argsBegin, argsEnd, " ", true) << std::endl;
     return mal::nilValue();
 }
 
@@ -1548,7 +2135,7 @@ BUILTIN("seq")
         }
         return mal::list(items);
     }
-    MAL_FAIL("%s is not a string or sequence", arg->print(true).c_str());
+    MAL_FAIL("'%s' is not a string or sequence", arg->print(true).c_str());
 }
 
 BUILTIN("sin")
@@ -2079,6 +2666,47 @@ BUILTIN("vl-filename-extension")
     return mal::string(p.extension());
 }
 
+BUILTIN("vl-filename-mktemp")
+{
+    int count = CHECK_ARGS_AT_LEAST(0);
+    char num[4];
+    sprintf(num, "%03x", ++tmpFileCount);
+    String filename = "tmpfile_";
+    String path;
+    std::filesystem::path p(std::filesystem::temp_directory_path());
+     std::filesystem::path d("");
+
+    filename +=  + num;
+    path = p / filename;
+
+    if (count > 0) {
+        ARG(malString, pattern);
+        p = pattern->value().c_str();
+        filename = p.stem();
+        filename +=  + num;
+        if (!p.has_root_path()) {
+            path = std::filesystem::temp_directory_path() / d;
+        }
+        else {
+            path = p.root_path() / p.relative_path().remove_filename();
+        }
+        if (p.has_extension()) {
+            filename += p.extension();
+        }
+        path += filename;
+    }
+    if (count > 1) {
+        ARG(malString, directory);
+        path = directory->value() / d;
+        path += filename;
+    }
+    if (count == 3) {
+        ARG(malString, extension);
+        path += extension->value();
+    }
+    return mal::string(path);
+}
+
 BUILTIN("vl-mkdir")
 {
     CHECK_ARGS_IS(1);
@@ -2099,6 +2727,93 @@ BUILTIN("vl-position")
     for (int i = 0; i < seq->count(); i++) {
         if(seq->item(i)->print(true).compare(op->print(true)) == 0) {
             return mal::integer(i);
+        }
+    }
+    return mal::nilValue();
+}
+
+BUILTIN("symbol")
+{
+    CHECK_ARGS_IS(1);
+    if(argsBegin->ptr()->type() == MALTYPE::SYM) {
+        return mal::trueValue();
+    }
+    return mal::nilValue();
+}
+
+BUILTIN("wcmatch")
+{
+    CHECK_ARGS_IS(2);
+    ARG(malString, str);
+    ARG(malString, p);
+    std::vector<String> StringList;
+    String del = ",";
+    String pat = p->value();
+    auto pos = pat.find(del);
+
+    while (pos != String::npos) {
+        StringList.push_back(pat.substr(0, pos));
+        pat.erase(0, pos + del.length());
+        pos = pat.find(del);
+    }
+    StringList.push_back(pat);
+    for (auto &it : StringList) {
+        String pattern = it;
+        String expr = "";
+        bool exclude = false;
+        bool open_br = false;
+        for (auto &ch : it) {
+            switch (ch) {
+                case '#':
+                    expr += "(\\d)";
+                    break;
+                case '@':
+                    expr += "[A-Za-zÀ-ȕ]";
+                    break;
+                case ' ':
+                    expr += "[ ]+";
+                    break;
+                case '.':
+                    expr += "([^(A-Za-z0-9 )]{1,})";
+                    break;
+                case '*':
+                    expr += "(.*)";
+                    break;
+                case '?':
+                    expr += "[A-Za-zÀ-ȕ0-9_ ]";
+                    break;
+                case '~': {
+                    if (open_br) {
+                        expr += "^";
+                    } else {
+                        expr += "[^";
+                    exclude = true;
+                    }
+                    break;
+                }
+                case '[':
+                    expr += "[";
+                    open_br = true;
+                    break;
+                case ']': {
+                    expr += "]{1}";
+                    open_br = false;
+                    break;
+                }
+                case '`':
+                    expr += "//";
+                    break;
+                default: {
+                    expr += ch;
+                }
+            }
+        }
+        if (exclude) {
+            expr += "]*";
+        }
+        std::regex e (expr);
+        if (std::regex_match (str->value(),e)) {
+            return mal::trueValue();
         }
     }
     return mal::nilValue();

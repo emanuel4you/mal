@@ -18,41 +18,29 @@ namespace mal {
     }
 
     malValuePtr type(MALTYPE type) {
-        switch(type)
-        {
+        switch(type) {
             case MALTYPE::ATOM:
                 return typeAtom();
-                break;
             case MALTYPE::BUILTIN:
                 return typeBuiltin();
-                break;
             case MALTYPE::FILE:
                 return typeFile();
-                break;
             case MALTYPE::INT:
                 return typeInteger();
-                break;
             case MALTYPE::LIST:
                 return typeList();
-                break;
             case MALTYPE::MAP:
                 return typeMap();
-                break;
             case MALTYPE::REAL:
                 return typeReal();
-                break;
             case MALTYPE::STR:
                 return typeString();
-                break;
             case MALTYPE::SYM:
                 return typeSymbol();
-                break;
             case MALTYPE::VEC:
                 return typeVector();
-                break;
             case MALTYPE::KEYW:
                 return typeKeword();
-                break;
             default:
                 return typeUndef();
         }
@@ -137,6 +125,11 @@ namespace mal {
 
     malValuePtr nilValue() {
         static malValuePtr c(new malConstant("nil"));
+        return malValuePtr(c);
+    };
+
+    malValuePtr nullValue() {
+        static malValuePtr c(new malConstant(""));
         return malValuePtr(c);
     };
 
@@ -240,7 +233,7 @@ static String makeHashKey(malValuePtr key)
     else if (const malKeyword* kkey = DYNAMIC_CAST(malKeyword, key)) {
         return kkey->print(true);
     }
-    MAL_FAIL("%s is not a string or keyword", key->print(true).c_str());
+    MAL_FAIL("'%s' is not a string or keyword", key->print(true).c_str());
 }
 
 static malHash::Map addToMap(malHash::Map& map,
@@ -707,5 +700,4 @@ malValuePtr malFile::readChar()
 {
     return mal::integer(fgetc(m_value));
 }
-
 
