@@ -3,6 +3,8 @@
 
 #include <regex>
 
+#include <string.h>
+
 typedef std::regex              Regex;
 
 static const Regex intRegex("^[-+]?\\d+$");
@@ -35,6 +37,9 @@ public:
         return ret;
     }
 
+    String last() { return m_lastToken; }
+    void setLast(const String &str) { m_lastToken = str; }
+
     bool eof() const {
         return m_iter == m_end;
     }
@@ -48,6 +53,7 @@ private:
     typedef String::const_iterator StringIter;
 
     String      m_token;
+    String      m_lastToken = "";
     StringIter  m_iter;
     StringIter  m_end;
 };
@@ -211,20 +217,9 @@ static malValuePtr readAtom(Tokeniser& tokeniser)
         return mal::list(mal::symbol("with-meta"), value, meta);
     }
 
-    /*
-     * Routin crashes wenn using:
-     * 'def!', 'defmacro!' or 'fn*' (!,* << on)
-     * as a constant.token, crashes on those three const chars ??
-     *
-     * Throw:
-     * >> terminate called after throwing an instance of 'std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >'
-     *
-     * using alias to avoid.
-     *
-     */
-
-    for (auto &constant : constantTable) {
-        if (token == constant.token) {
+    for (Constant  &constant : constantTable) {
+        if ((token == constant.token) ||
+        ((tokeniser.last() == "quote") && (strcasecmp(token.c_str(), constant.token) == 0))) {
             return constant.value;
         }
     }
@@ -260,5 +255,6 @@ static void readList(Tokeniser& tokeniser, malValueVec* items,
 
 static malValuePtr processMacro(Tokeniser& tokeniser, const String& symbol)
 {
+    tokeniser.setLast(symbol);
     return mal::list(mal::symbol(symbol), readForm(tokeniser));
 }

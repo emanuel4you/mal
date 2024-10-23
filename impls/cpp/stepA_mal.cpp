@@ -6,6 +6,7 @@
 
 #include <iostream>
 #include <memory>
+#include <algorithm>
 
 #define MAX_FUNC 34
 
@@ -46,9 +47,11 @@ static const char* malEvalFunctionTable[MAX_FUNC] = {
     "zerop"
 };
 
+bool traceDebug = false;
 
 malValuePtr READ(const String& input);
 String PRINT(malValuePtr ast);
+String strToUpper(String s);
 static void installFunctions(malEnvPtr env);
 //  Installs functions, macros and constants implemented in MAL.
 static void installEvalCore(malEnvPtr env);
@@ -61,6 +64,8 @@ static malValuePtr quasiquote(malValuePtr obj);
 static ReadLine s_readLine("~/.mal-history");
 
 static malEnvPtr replEnv(new malEnv);
+
+static malEnvPtr shadowEnv(new malEnv);
 
 int main(int argc, char* argv[])
 {
@@ -126,10 +131,15 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
     }
     while (1) {
 
-       const malEnvPtr dbgenv = env->find("DEBUG-EVAL");
-       if (dbgenv && dbgenv->get("DEBUG-EVAL")->isTrue()) {
-           std::cout << "EVAL: " << PRINT(ast) << "\n";
-       }
+
+        const malEnvPtr dbgenv = env->find("DEBUG-EVAL");
+        if (dbgenv && dbgenv->get("DEBUG-EVAL")->isTrue()) {
+            std::cout << "EVAL: " << PRINT(ast) << "\n";
+        }
+
+        if (traceDebug) {
+            std::cout << "TRACE: " << PRINT(ast) << std::endl;
+        }
 
         const malList* list = DYNAMIC_CAST(malList, ast);
         if (!list || (list->count() == 0)) {
@@ -140,6 +150,12 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
         // First handle the special forms.
         if (const malSymbol* symbol = DYNAMIC_CAST(malSymbol, list->item(0))) {
             String special = symbol->value();
+
+            const malEnvPtr traceEnv = shadowEnv->find(strToUpper(special));
+            if (traceEnv && traceEnv->get(strToUpper(special))->print(true) != "nil") {
+                traceDebug = true;
+                std::cout << "TRACE: " << PRINT(ast) << std::endl;
+            }
             int argCount = list->count() - 1;
 
             if (special == "and") {
@@ -273,6 +289,48 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
                 return mal::nilValue();
             }
 
+            if (special == "getkword") {
+                checkArgsIs("getkword", 1, argCount);
+                const malString* msg = VALUE_CAST(malString, list->item(1));
+                std::cout << msg->value();
+
+                const malString* pat = VALUE_CAST(malString, shadowEnv->get("INITGET-STR"));
+                const malInteger* bit = VALUE_CAST(malInteger, shadowEnv->get("INITGET-BIT"));
+                std::vector<String> StringList;
+                String del = " ";
+                String result;
+                String pattern = pat->value();
+                auto pos = pattern.find(del);
+
+                while (pos != String::npos) {
+                    StringList.push_back(pattern.substr(0, pos));
+                    pattern.erase(0, pos + del.length());
+                    pos = pattern.find(del);
+                }
+                StringList.push_back(pattern);
+
+                while (getline (std::cin, result)) {
+                    for (auto &it : StringList) {
+                        if (it == result) {
+                            return mal::string(result);
+                        }
+                    }
+                    if ((bit->value() & 1) != 1) {
+                        return mal::nilValue();
+                    }
+                    std::cout << msg->value();
+                }
+            }
+
+            if (special == "getvar") {
+                checkArgsIs("getvar", 1, argCount);
+                malValuePtr value = shadowEnv->get(EVAL(list->item(1), NULL)->print(true));
+                if (value) {
+                    return value;
+                }
+                return mal::nilValue();
+            }
+
             if (special == "if") {
                 checkArgsBetween("if", 2, 3, argCount);
 
@@ -282,6 +340,18 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
                 }
                 ast = list->item(isTrue ? 2 : 3);
                 continue; // TCO
+            }
+            if (special == "initget") {
+                checkArgsBetween("initget",1, 2, argCount);
+                if (list->item(1)->type() == MALTYPE::INT && argCount == 2) {
+                    shadowEnv->set("INITGET-BIT", EVAL(list->item(1), env));
+                    shadowEnv->set("INITGET-STR", EVAL(list->item(2), env));
+                }
+                else {
+                    shadowEnv->set("INITGET-BIT", mal::integer(0));
+                    shadowEnv->set("INITGET-STR", EVAL(list->item(1), env));
+                }
+                return mal::nilValue();
             }
 
             if (special == "let*") {
@@ -390,6 +460,26 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
                 return env->set(id->value(), EVAL(list->item(i+1), env));
             }
 
+            if (special == "setvar") {
+                checkArgsIs("setvar", 2, argCount);
+                const malSymbol* id = VALUE_CAST(malSymbol, list->item(1));
+                return shadowEnv->set(id->value(), EVAL(list->item(2), env));
+            }
+
+            if (special == "trace") {
+                checkArgsIs("trace", 1, argCount);
+                malValuePtr foo = list->item(1);
+                shadowEnv->set(strToUpper(list->item(1)->print(true)), mal::trueValue());
+                return mal::symbol(strToUpper(list->item(1)->print(true)));
+            }
+
+            if (special == "untrace") {
+                checkArgsIs("untrace", 1, argCount);
+                malValuePtr foo = list->item(1);
+                shadowEnv->set(strToUpper(list->item(1)->print(true)), mal::nilValue());
+                return mal::symbol(strToUpper(list->item(1)->print(true)));
+            }
+
             if (special == "try*") {
                 malValuePtr tryBody = list->item(1);
 
@@ -484,6 +574,7 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
         if (const malLambda* lambda = DYNAMIC_CAST(malLambda, op)) {
             if (lambda->isMacro()) {
                 ast = lambda->apply(list->begin()+1, list->end());
+                traceDebug = false;
                 continue; // TCO
             }
             malValueVec* items = STATIC_CAST(malList, list->rest())->evalItems(env);
@@ -589,5 +680,13 @@ malValuePtr readline(const String& prompt)
         return mal::string(input);
     }
     return mal::nilValue();
+}
+
+String strToUpper(String s)
+{
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c){ return std::toupper(c); } // correct
+                  );
+    return s;
 }
 
