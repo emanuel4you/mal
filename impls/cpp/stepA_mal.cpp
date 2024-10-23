@@ -158,29 +158,34 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
 
             if (special == "bound?" || special == "boundp") {
                 checkArgsIs(special.c_str(), 1, argCount);
-                {
-                    if (list->item(1)->print(true).compare("nil") == 0) {
+                if (list->item(1)->print(true).compare("nil") == 0) {
+                    return special == "bound?" ? mal::falseValue() : mal::nilValue();
+                }
+                else {
+                    malEnvPtr sym = env->find(list->item(1)->print(true));
+                    if(!sym) {
                         return special == "bound?" ? mal::falseValue() : mal::nilValue();
                     }
-                    else {
-                            malEnvPtr sym = env->find(list->item(1)->print(true));
-                            if(!sym) {
-                                return special == "bound?" ? mal::falseValue() : mal::nilValue();
-                            }
-                    }
+                }
+                return mal::trueValue();
+            }
+
+            if (special == "debug-eval") {
+                checkArgsIs("debug-eval", 1, argCount);
+                if (list->item(1) == mal::trueValue()) {
+                    env->set("DEBUG-EVAL", mal::trueValue());
                     return mal::trueValue();
+                }
+                else {
+                    env->set("DEBUG-EVAL", mal::falseValue());
+                    return mal::falseValue();
                 }
             }
 
-            if (special == "def!" || special == "setq") {
-                MAL_CHECK(checkArgsAtLeast(special.c_str(), 2, argCount) % 2 == 0, "def!: missing odd number");
-                int i;
-                for (i = 1; i < argCount - 2; i += 2) {
-                    const malSymbol* id = VALUE_CAST(malSymbol, list->item(i));
-                    env->set(id->value(), EVAL(list->item(i+1), env));
-                }
-                const malSymbol* id = VALUE_CAST(malSymbol, list->item(i));
-                return env->set(id->value(), EVAL(list->item(i+1), env));
+            if (special == "def!") {
+                checkArgsIs("def!", 2, argCount);
+                const malSymbol* id = VALUE_CAST(malSymbol, list->item(1));
+                return env->set(id->value(), EVAL(list->item(2), env));
             }
 
             if (special == "defmacro!") {
@@ -190,6 +195,36 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
                 malValuePtr body = EVAL(list->item(2), env);
                 const malLambda* lambda = VALUE_CAST(malLambda, body);
                 return env->set(id->value(), mal::macro(*lambda));
+            }
+
+            if (special == "defun") {
+                checkArgsAtLeast("defun", 3, argCount);
+
+                String macro = "(do";
+                const malSymbol* id = VALUE_CAST(malSymbol, list->item(1));
+                const malSequence* bindings =
+                    VALUE_CAST(malSequence, list->item(2));
+                StringVec params;
+                for (int i = 0; i < bindings->count(); i++) {
+                    const malSymbol* sym =
+                        VALUE_CAST(malSymbol, bindings->item(i));
+                        std::cout << "parameter: " << sym->print(true) << std::endl;
+                    params.push_back(sym->value());
+                }
+
+                for (int i = 3; i <= argCount; i++) {
+                    macro += " ";
+                    macro += list->item(i)->print(true);
+                    for (auto it = params.begin(); it != params.end(); it++) {
+                        if (list->item(i)->print(true).find(*it) != std::string::npos) {
+                            std::cout << "parameter '" << *it << "' in: " << list->item(i)->print(true) << std::endl;
+                        }
+                    }
+                }
+                macro += ")";
+                malValuePtr body = READ(macro);
+                const malLambda* lambda = new malLambda(params, body, env);
+                return env->set(id->value(), new malLambda(*lambda, true));
             }
 
             if (special == "do" || special == "progn") {
@@ -215,6 +250,27 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
                 }
 
                 return mal::lambda(params, list->item(2), env);
+            }
+
+            if (special == "foreach") {
+                checkArgsIs("foreach", 3, argCount);
+                const malSymbol* sym =
+                        VALUE_CAST(malSymbol, list->item(1));
+                malSequence* each =
+                    VALUE_CAST(malSequence, EVAL(list->item(2), env));
+
+                malEnvPtr inner(new malEnv(env));
+                inner->set(sym->value(), mal::nilValue());
+                int count = each->count();
+                malValuePtr result = NULL;
+                for (int i=0; i < count; i++) {
+                    inner->set(sym->value(), each->item(i));
+                    result = EVAL(list->item(3), inner);
+                }
+                if (result) {
+                    return result;
+                }
+                return mal::nilValue();
             }
 
             if (special == "if") {
@@ -321,6 +377,17 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
                 checkArgsIs("set", 2, argCount);
                 const malSymbol* id = new malSymbol(list->item(1)->print(true));
                 return env->set(id->value(), EVAL(list->item(2), env));
+            }
+
+            if (special == "setq") {
+                MAL_CHECK(checkArgsAtLeast(special.c_str(), 2, argCount) % 2 == 0, "setq: missing odd number");
+                int i;
+                for (i = 1; i < argCount - 2; i += 2) {
+                    const malSymbol* id = VALUE_CAST(malSymbol, list->item(i));
+                    env->set(id->value(), EVAL(list->item(i+1), env));
+                }
+                const malSymbol* id = VALUE_CAST(malSymbol, list->item(i));
+                return env->set(id->value(), EVAL(list->item(i+1), env));
             }
 
             if (special == "try*") {
@@ -440,7 +507,7 @@ malValuePtr APPLY(malValuePtr op, malValueIter argsBegin, malValueIter argsEnd)
 {
     const malApplicable* handler = DYNAMIC_CAST(malApplicable, op);
     MAL_CHECK(handler != NULL,
-              "\"%s\" is not applicable", op->print(true).c_str());
+              "'%s' is not applicable", op->print(true).c_str());
 
     return handler->apply(argsBegin, argsEnd);
 }
