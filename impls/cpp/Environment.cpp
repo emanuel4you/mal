@@ -19,26 +19,20 @@ malEnv::malEnv(malEnvPtr outer, const StringVec& bindings,
     int n = bindings.size();
 
     auto it = argsBegin;
-    int currArg = 0;
     for (int i = 0; i < n; i++) {
-        currArg = i;
         if (bindings[i] == "&" ||
             bindings[i] == "/"
         ) {
             MAL_CHECK(i <= n - 2, "There must be one parameter after the &");
             set(bindings[n-1], mal::list(it, argsEnd));
-            currArg++;
-            break;
+            continue;
         }
         MAL_CHECK(it != argsEnd, "Not enough parameters");
+        m_bindings.push_back(bindings[i]);
         set(bindings[i], *it);
         ++it;
     }
     MAL_CHECK(it == argsEnd, "Too many parameters");
-
-    for (int i = currArg; i < n; i++) {
-        m_bindings.push_back(bindings[i]);
-    }
 }
 
 malEnv::~malEnv()
