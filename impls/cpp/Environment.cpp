@@ -18,7 +18,6 @@ malEnv::malEnv(malEnvPtr outer, const StringVec& bindings,
     setLamdaMode(true);
     int n = bindings.size();
     for (auto &it : bindings) {
-        std::cout << "[malEnv::malEnv] bindings: " << it << std::endl;
         if (it != "&" ||
             it != "/")
             {
