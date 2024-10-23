@@ -17,18 +17,25 @@ malEnv::malEnv(malEnvPtr outer, const StringVec& bindings,
     TRACE_ENV("Creating malEnv %p, outer=%p\n", this, m_outer.ptr());
     setLamdaMode(true);
     int n = bindings.size();
+    for (auto &it : bindings) {
+        std::cout << "[malEnv::malEnv] bindings: " << it << std::endl;
+        if (it != "&" ||
+            it != "/")
+            {
+                m_bindings.push_back(it);
+            }
+    }
 
     auto it = argsBegin;
     for (int i = 0; i < n; i++) {
         if (bindings[i] == "&" ||
             bindings[i] == "/"
         ) {
-            MAL_CHECK(i <= n - 2, "There must be one parameter after the &");
+            MAL_CHECK(i == n - 2, "There must be one parameter after the &");
             set(bindings[n-1], mal::list(it, argsEnd));
-            continue;
+            return;
         }
         MAL_CHECK(it != argsEnd, "Not enough parameters");
-        m_bindings.push_back(bindings[i]);
         set(bindings[i], *it);
         ++it;
     }
