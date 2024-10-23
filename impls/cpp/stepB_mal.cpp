@@ -8,7 +8,7 @@
 #include <memory>
 #include <algorithm>
 
-#define MAX_FUNC 34
+#define MAX_FUNC 32
 
 static const char* malEvalFunctionTable[MAX_FUNC] = {
     "and",
@@ -28,8 +28,6 @@ static const char* malEvalFunctionTable[MAX_FUNC] = {
     "let*",
     "minus?",
     "minusp",
-    "number?",
-    "numberp",
     "new_dialog",
     "or",
     "progn",
@@ -394,7 +392,7 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
                         return special == "minus?" ? mal::falseValue() : mal::nilValue();
                 }
             }
-
+#if 0
             if (special == "number?" || special == "numberp") {
                 checkArgsIs(special.c_str(), 1, argCount);
 
@@ -407,7 +405,7 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
                             DYNAMIC_CAST(malDouble, EVAL(list->item(1), env))) ? mal::trueValue() : mal::nilValue();
                 }
             }
-
+#endif
             if (special == "or") {
                 checkArgsAtLeast("or", 2, argCount);
                 int value = 0;

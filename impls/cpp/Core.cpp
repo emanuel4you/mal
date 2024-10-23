@@ -313,6 +313,7 @@ BUILTIN_ISA("sequential?",  malSequence);
 BUILTIN_ISA("string?",      malString);
 BUILTIN_ISA("symbol?",      malSymbol);
 BUILTIN_ISA("vector?",      malVector);
+//BUILTIN_ISA("number?",      malInteger);
 
 BUILTIN_INTOP(+,            false);
 BUILTIN_INTOP(/,            true);
@@ -1307,15 +1308,6 @@ BUILTIN("min")
     }
 }
 
-BUILTIN("null")
-{
-    CHECK_ARGS_IS(1);
-    if (NIL_PTR) {
-        return mal::trueValue();
-    }
-    return mal::nilValue();
-}
-
 BUILTIN("nth")
 {
     // twisted parameter for both LISPs!
@@ -1343,6 +1335,27 @@ BUILTIN("nth")
         MAL_CHECK(i >= 0 && i < seq->count(), "Index out of range");
         return seq->item(i);
     }
+}
+
+BUILTIN("null")
+{
+    CHECK_ARGS_IS(1);
+    if (NIL_PTR) {
+        return mal::trueValue();
+    }
+    return mal::nilValue();
+}
+
+BUILTIN("number?")
+{
+    return mal::boolean(DYNAMIC_CAST(malInteger, *argsBegin) ||
+            DYNAMIC_CAST(malDouble, *argsBegin));
+}
+
+BUILTIN("numberp")
+{
+    return (DYNAMIC_CAST(malInteger, *argsBegin) ||
+            DYNAMIC_CAST(malDouble, *argsBegin)) ? mal::trueValue() : mal::nilValue();
 }
 
 BUILTIN("open")

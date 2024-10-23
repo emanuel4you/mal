@@ -37,9 +37,6 @@ public:
         return ret;
     }
 
-    String last() { return m_lastToken; }
-    void setLast(const String &str) { m_lastToken = str; }
-
     bool eof() const {
         return m_iter == m_end;
     }
@@ -254,6 +251,5 @@ static void readList(Tokeniser& tokeniser, malValueVec* items,
 
 static malValuePtr processMacro(Tokeniser& tokeniser, const String& symbol)
 {
-    tokeniser.setLast(symbol);
     return mal::list(mal::symbol(symbol), readForm(tokeniser));
 }
