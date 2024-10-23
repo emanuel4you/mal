@@ -26,6 +26,7 @@ malEnv::malEnv(malEnvPtr outer, const StringVec& bindings,
             bindings[i] == "/"
         ) {
             MAL_CHECK(i <= n - 2, "There must be one parameter after the &");
+            set(bindings[n-1], mal::list(it, argsEnd));
             currArg++;
             break;
         }
@@ -37,7 +38,6 @@ malEnv::malEnv(malEnvPtr outer, const StringVec& bindings,
 
     for (int i = currArg; i < n; i++) {
         m_bindings.push_back(bindings[i]);
-        set(bindings[i], mal::nilValue());
     }
 }
 
