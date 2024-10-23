@@ -18,8 +18,6 @@ malEnv::malEnv(malEnvPtr outer, const StringVec& bindings,
     setLamdaMode(true);
     int n = bindings.size();
 
-    //for (auto it = argsBegin; it != argsEnd; it++) { std::cout << "[malEnv::malEnv] arg: " << it->ptr()->print(true) << std::endl; }
-    for (auto &it : bindings) { std::cout << "[malEnv::malEnv] bindings: " << it << std::endl; }
     auto it = argsBegin;
     int currArg = 0;
     for (int i = 0; i < n; i++) {
