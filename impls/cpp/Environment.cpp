@@ -15,22 +15,32 @@ malEnv::malEnv(malEnvPtr outer, const StringVec& bindings,
 : m_outer(outer)
 {
     TRACE_ENV("Creating malEnv %p, outer=%p\n", this, m_outer.ptr());
+    setLamdaMode(true);
     int n = bindings.size();
+
+    //for (auto it = argsBegin; it != argsEnd; it++) { std::cout << "[malEnv::malEnv] arg: " << it->ptr()->print(true) << std::endl; }
+    for (auto &it : bindings) { std::cout << "[malEnv::malEnv] bindings: " << it << std::endl; }
     auto it = argsBegin;
+    int currArg = 0;
     for (int i = 0; i < n; i++) {
+        currArg = i;
         if (bindings[i] == "&" ||
             bindings[i] == "/"
         ) {
-            MAL_CHECK(i == n - 2, "There must be one parameter after the &");
-
-            set(bindings[n-1], mal::list(it, argsEnd));
-            return;
+            MAL_CHECK(i <= n - 2, "There must be one parameter after the &");
+            currArg++;
+            break;
         }
         MAL_CHECK(it != argsEnd, "Not enough parameters");
         set(bindings[i], *it);
         ++it;
     }
     MAL_CHECK(it == argsEnd, "Too many parameters");
+
+    for (int i = currArg; i < n; i++) {
+        m_bindings.push_back(bindings[i]);
+        set(bindings[i], mal::nilValue());
+    }
 }
 
 malEnv::~malEnv()
@@ -61,7 +71,18 @@ malValuePtr malEnv::get(const String& symbol)
 
 malValuePtr malEnv::set(const String& symbol, malValuePtr value)
 {
-    m_map[symbol] = value;
+    if (isLamda()) {
+        for (auto &it : m_bindings) {
+            if (symbol == it) {
+                m_map[symbol] = value;
+                return value;
+            }
+        }
+        m_outer.ptr()->set(symbol, value);
+    }
+    else {
+        m_map[symbol] = value;
+    }
     return value;
 }
 

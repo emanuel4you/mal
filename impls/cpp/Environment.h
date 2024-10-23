@@ -15,6 +15,9 @@ public:
 
     ~malEnv();
 
+    void setLamdaMode(bool mode) { m_isLamda = mode; }
+    bool isLamda() const { return m_isLamda; }
+
     malValuePtr get(const String& symbol);
     malEnvPtr   find(const String& symbol);
     malValuePtr set(const String& symbol, malValuePtr value);
@@ -24,6 +27,8 @@ private:
     typedef std::map<String, malValuePtr> Map;
     Map m_map;
     malEnvPtr m_outer;
+    StringVec m_bindings;
+    bool m_isLamda = false;
 };
 
 #endif // INCLUDE_ENVIRONMENT_H
