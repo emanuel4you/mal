@@ -218,8 +218,7 @@ static malValuePtr readAtom(Tokeniser& tokeniser)
     }
 
     for (Constant  &constant : constantTable) {
-        if ((token == constant.token) ||
-        ((tokeniser.last() == "quote") && (strcasecmp(token.c_str(), constant.token) == 0))) {
+        if (token == constant.token) {
             return constant.value;
         }
     }

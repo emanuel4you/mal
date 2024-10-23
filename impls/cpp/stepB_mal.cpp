@@ -174,13 +174,19 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
 
             if (special == "bound?" || special == "boundp") {
                 checkArgsIs(special.c_str(), 1, argCount);
-                if (list->item(1)->print(true).compare("nil") == 0) {
+                if (EVAL(list->item(1), env)->print(true).compare("nil") == 0) {
                     return special == "bound?" ? mal::falseValue() : mal::nilValue();
                 }
                 else {
-                    malEnvPtr sym = env->find(list->item(1)->print(true));
+                    const malEnvPtr sym = env->find(EVAL(list->item(1), env)->print(true));
+
                     if(!sym) {
                         return special == "bound?" ? mal::falseValue() : mal::nilValue();
+                    }
+                    else {
+                        if (env->get(EVAL(list->item(1), env)->print(true)) == mal::nilValue()) {
+                            return special == "bound?" ? mal::falseValue() : mal::nilValue();
+                        }
                     }
                 }
                 return mal::trueValue();
@@ -224,18 +230,12 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
                 for (int i = 0; i < bindings->count(); i++) {
                     const malSymbol* sym =
                         VALUE_CAST(malSymbol, bindings->item(i));
-                        std::cout << "parameter: " << sym->print(true) << std::endl;
                     params.push_back(sym->value());
                 }
 
                 for (int i = 3; i <= argCount; i++) {
                     macro += " ";
                     macro += list->item(i)->print(true);
-                    for (auto it = params.begin(); it != params.end(); it++) {
-                        if (list->item(i)->print(true).find(*it) != std::string::npos) {
-                            std::cout << "parameter '" << *it << "' in: " << list->item(i)->print(true) << std::endl;
-                        }
-                    }
                 }
                 macro += ")";
                 malValuePtr body = READ(macro);
@@ -470,7 +470,7 @@ malValuePtr EVAL(malValuePtr ast, malEnvPtr env)
                 checkArgsIs("trace", 1, argCount);
                 malValuePtr foo = list->item(1);
                 shadowEnv->set(strToUpper(list->item(1)->print(true)), mal::trueValue());
-                return mal::symbol(strToUpper(list->item(1)->print(true)));
+                return mal::symbol(list->item(1)->print(true));
             }
 
             if (special == "untrace") {
